@@ -1,0 +1,996 @@
+py -m http.server 8000<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Twitch Multiview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<script src="https://embed.twitch.tv/embed/v1.js"></script>
+<style>
+/* Layout: barra de controles arriba y, debajo, un escenario que ocupa todo el alto.
+   El escenario es una grilla CSS de 360 columnas finas; cada stream ocupa una franja
+   de su fila. Los reproductores nunca cambian de lugar en el DOM (solo cambian sus
+   coordenadas CSS), así que reordenar no recarga ningún stream. */
+:root {
+  --bg: #0d0f14;
+  --panel: #151821;
+  --panel-2: #1c202b;
+  --line: #2a2f3d;
+  --fg: #e8eaf1;
+  --muted: #98a0b3;
+  --accent: #a99bff;
+  --accent-ink: #15112e;
+  --danger: #ff8080;
+  --font-display: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+
+[hidden] { display: none !important; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.45 var(--font-body);
+  overflow: hidden;
+}
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { height: 100%; display: flex; flex-direction: column; }
+
+/* ---------- barra superior ---------- */
+.topbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand {
+  font: 600 16px/1 var(--font-display);
+  letter-spacing: .01em;
+  display: flex; align-items: center; gap: 8px;
+  margin-right: 4px;
+}
+.brand i {
+  width: 10px; height: 10px; border-radius: 2px; background: var(--accent);
+  box-shadow: 14px 0 0 -2px var(--muted), 0 14px 0 -2px var(--muted);
+  margin-right: 14px; margin-bottom: 14px;
+}
+.add { display: flex; flex: 1 1 280px; max-width: 520px; min-width: 0; gap: 6px; }
+.field {
+  flex: 1; min-width: 0; display: flex; align-items: center;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  padding: 0 10px;
+}
+.field:focus-within { border-color: var(--accent); }
+.field span { color: var(--muted); white-space: nowrap; }
+.field input {
+  flex: 1; min-width: 0; background: transparent; border: 0; outline: 0;
+  padding: 9px 4px;
+}
+.field input::placeholder { color: #667089; }
+.field input:disabled { cursor: not-allowed; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover:not(:disabled) { border-color: #3b4254; background: #232837; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: #bbb0ff; }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.btn.primary[aria-pressed="true"] { color: var(--accent-ink); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { background: var(--panel-2); border: 0; padding: 8px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.seg button:disabled { opacity: .45; cursor: not-allowed; }
+
+.sel-wrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.sel-wrap select {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 8px; cursor: pointer; color: var(--fg);
+}
+.sel-wrap select:disabled { opacity: .45; cursor: not-allowed; }
+
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.count { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.notice {
+  padding: 10px 12px; background: #2a2236; border-bottom: 1px solid var(--line);
+  color: #d9d2f3; font-size: 13px;
+}
+.notice code {
+  background: rgba(255,255,255,.08); border-radius: 4px; padding: 1px 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px;
+}
+
+.toast {
+  position: fixed; z-index: 30; left: 50%; transform: translateX(-50%);
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  max-width: min(560px, calc(100vw - 32px));
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.45);
+  font-size: 13px;
+}
+.toast.error { border-color: var(--danger); color: var(--danger); }
+
+svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i circle { fill: currentColor; stroke: none; }
+
+/* ---------- escenario ---------- */
+.stage {
+  flex: 1; min-height: 0; min-width: 0; position: relative;
+  display: grid; padding: 3px;
+  grid-template-columns: repeat(360, minmax(0, 1fr));
+  grid-template-rows: var(--rows, 1fr);
+}
+
+.tile {
+  position: relative; min-width: 0; min-height: 0; margin: 3px;
+  grid-column: var(--gc, auto); grid-row: var(--gr, auto);
+  background: #000; border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+}
+.tile.has-audio { border-color: var(--accent); }
+.tile.flash { animation: flash .9s ease; }
+@keyframes flash { 0%, 60% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.mount, .mount iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+.bar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+  display: flex; align-items: center; gap: 4px; padding: 8px;
+  background: linear-gradient(to bottom, rgba(0,0,0,.72), transparent);
+  opacity: 0; transition: opacity .15s; pointer-events: none;
+}
+.tile:hover .bar, .tile:focus-within .bar { opacity: 1; }
+@media (hover: none) { .bar { opacity: 1; } }
+.bar .name { font: 500 13px var(--font-display); margin-right: auto; text-shadow: 0 1px 3px #000; }
+.bar button {
+  pointer-events: auto; width: 30px; height: 30px; display: grid; place-items: center;
+  background: rgba(20,22,30,.8); border: 1px solid rgba(255,255,255,.14); border-radius: 7px; cursor: pointer;
+}
+.bar button:hover { background: rgba(48,52,68,.95); }
+.bar button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.bar button.remove:hover { color: var(--danger); }
+body.editing .bar { display: none; }
+body.locked .bar [data-act="remove"], body.locked .bar [data-act="focus"] { display: none; }
+
+/* ---------- modo edición ---------- */
+.edit {
+  position: absolute; inset: 0; z-index: 3;
+  display: flex; flex-direction: column; gap: 8px; padding: 8px;
+  background: rgba(10,12,18,.84);
+}
+.edit-top { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+.grip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2);
+  cursor: grab; user-select: none; font-size: 12.5px;
+}
+.grip:active { cursor: grabbing; }
+.mini {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px;
+  padding: 5px 9px; cursor: pointer; font-size: 12.5px; white-space: nowrap;
+}
+.mini:hover { border-color: #3b4254; background: #232837; }
+.mini.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.mini.danger:hover { color: var(--danger); border-color: var(--danger); }
+.edit-name {
+  margin: auto; font: 600 clamp(14px, 1.8vw, 22px)/1.1 var(--font-display);
+  text-align: center; overflow-wrap: anywhere;
+}
+.edit-form { display: flex; gap: 6px; }
+.edit-form input {
+  flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 7px; padding: 6px 8px;
+}
+.edit-form input:focus { border-color: var(--accent); outline: 0; }
+.swap-here {
+  position: absolute; inset: 0; z-index: 2; border: 0; cursor: pointer;
+  background: rgba(169,155,255,.3); color: var(--fg);
+  font: 600 15px var(--font-display);
+}
+.swap-here:hover { background: rgba(169,155,255,.5); }
+.tile.picked { outline: 3px dashed var(--accent); outline-offset: -3px; }
+.tile.drop { outline: 3px solid var(--accent); outline-offset: -3px; }
+.tile.drop .edit { background: rgba(169,155,255,.35); }
+.tile.dragging { opacity: .45; }
+
+/* ---------- herramientas de fila ---------- */
+.rowtools {
+  position: absolute; inset: 0; z-index: 6; padding: 3px;
+  display: grid; grid-template-columns: minmax(0, 1fr); pointer-events: none;
+}
+.rowtool {
+  grid-column: 1; pointer-events: auto; justify-self: start; align-self: center;
+  margin-left: 8px; padding: 3px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--panel); border: 1px solid var(--accent); border-radius: 9px;
+}
+.rowtool button {
+  width: 26px; height: 22px; display: grid; place-items: center;
+  background: transparent; border: 0; border-radius: 6px; cursor: pointer;
+}
+.rowtool button:hover:not(:disabled) { background: var(--panel-2); color: var(--accent); }
+.rowtool button:disabled { opacity: .3; cursor: not-allowed; }
+.rgrip {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 3px 4px; cursor: grab; user-select: none; font-size: 11px; line-height: 1;
+  border-radius: 6px;
+}
+.rgrip:hover { background: var(--panel-2); }
+.rgrip:active { cursor: grabbing; }
+
+/* ---------- pantalla vacía ---------- */
+.empty {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center;
+  gap: 14px; padding: 24px; text-align: center;
+}
+.empty h1 { margin: 0; font: 600 clamp(22px, 4vw, 32px)/1.15 var(--font-display); text-wrap: balance; }
+.empty p { margin: 0; max-width: 48ch; color: var(--muted); text-wrap: balance; }
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.chip {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 14px; cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- celular: todo en una columna ---------- */
+@media (max-width: 720px) {
+  body { overflow: auto; }
+  .app { height: auto; min-height: 100%; }
+  .stage {
+    display: flex; flex-direction: column; flex: none; min-height: 0;
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
+  }
+  .tile { flex: none; aspect-ratio: 16 / 9; }
+  .empty { position: static; padding: 48px 8px; }
+  .rowtools { display: none !important; }
+  .tools { margin-left: 0; }
+  #layout, .sel-wrap { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile.flash { animation: none; }
+  .bar { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><i aria-hidden="true"></i>Multiview</div>
+
+    <form class="add" id="add-form" autocomplete="off">
+      <label class="field" for="channel">
+        <span>twitch.tv/</span>
+        <input id="channel" type="text" placeholder="nombre del streamer y Enter" spellcheck="false" autocapitalize="off" autocorrect="off" aria-label="Canal de Twitch">
+      </label>
+      <button class="btn primary" type="submit" id="add-btn">Agregar</button>
+    </form>
+
+    <div class="tools">
+      <span class="count" id="count" aria-live="polite"></span>
+      <div class="seg" id="layout" role="group" aria-label="Disposición">
+        <button type="button" data-mode="grid" aria-pressed="true">Grid</button>
+        <button type="button" data-mode="focus" aria-pressed="false">Foco</button>
+      </div>
+      <label class="sel-wrap" for="cols">Columnas
+        <select id="cols">
+          <option value="auto">Auto</option>
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+          <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+          <option value="10">10</option>
+          <option value="custom" disabled>Personalizado</option>
+        </select>
+      </label>
+      <button class="btn" type="button" id="edit" aria-pressed="false">Editar</button>
+      <button class="btn" type="button" id="lock" aria-pressed="false">Bloquear</button>
+      <button class="btn" type="button" id="playall">Reproducir todo</button>
+      <button class="btn" type="button" id="copy">Copiar enlace</button>
+      <button class="btn" type="button" id="clear">Quitar todo</button>
+    </div>
+  </header>
+
+  <div class="notice" id="notice" hidden></div>
+
+  <main class="stage" id="stage" aria-label="Streams">
+    <div class="empty" id="empty">
+      <h1>Mirá varios streams a la vez</h1>
+      <p>Escribí un canal de Twitch arriba y apretá Enter. Entran hasta 20 en la misma pantalla. Podés separar varios nombres con comas para agregarlos juntos.</p>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="rowtools" id="rowtools" hidden></div>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const MAX = 20;
+  const C = 360;                       // columnas finas de la grilla del escenario
+  const EXAMPLES = ['ibai', 'auronplay', 'shroud', 'pokimane'];
+  const KEY_LAYOUT = 'twitch-multiview:layout:v2';
+  const KEY_PREFS = 'twitch-multiview:prefs:v2';
+
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage'), emptyEl = $('empty'), rowtools = $('rowtools'), toast = $('toast');
+  const form = $('add-form'), input = $('channel'), colsSel = $('cols');
+  const btnEdit = $('edit'), btnLock = $('lock');
+
+  /* ---------- estado ---------- */
+  const tiles = new Map();   // uid -> { uid, name, el, player, ready, muted, pending }
+  let rows = [];             // filas del grid: [[uid, uid], [uid]]
+  let nextId = 1;
+  let audio = null;          // uid del stream con sonido
+  let focusUid = null;       // uid del stream grande en modo Foco
+  let mode = 'grid';         // 'grid' | 'focus'
+  let colsSetting = 'auto';  // 'auto' | '1'..'10'
+  let manual = false;        // true cuando el usuario acomodó a mano
+  let locked = false;
+  let editing = false;
+  let picked = null;         // uid elegido para intercambiar con un clic
+  let dragging = null;       // { kind: 'tile', uid } | { kind: 'row', index }
+  let dropKey = '';
+  let gesture = false;       // el usuario ya interactuó con la página
+  let toastTimer = 0;
+
+  /* Twitch solo reproduce dentro de páginas cuyo dominio figure como "parent". */
+  const parents = (() => {
+    const set = new Set();
+    if (location.hostname) set.add(location.hostname);
+    try { for (const o of (location.ancestorOrigins || [])) set.add(new URL(o).hostname); } catch (e) { /* ignorar */ }
+    return [...set];
+  })();
+
+  const ICONS = {
+    volume: '<svg class="i" viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M19 6a9 9 0 0 1 0 12"/></svg>',
+    muted: '<svg class="i" viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>',
+    focus: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="12" height="16" rx="1.5"/><rect x="17.5" y="4" width="3.5" height="6.5" rx="1"/><rect x="17.5" y="13.5" width="3.5" height="6.5" rx="1"/></svg>',
+    full: '<svg class="i" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+    close: '<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    grip: '<svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>',
+    up: '<svg class="i" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>',
+    down: '<svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+    lock: '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+    unlock: '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-1.8"/></svg>'
+  };
+
+  /* ---------- utilidades ---------- */
+  function setStatus(msg, isError) {
+    clearTimeout(toastTimer);
+    if (!msg) { toast.hidden = true; return; }
+    toast.textContent = msg;
+    toast.classList.toggle('error', !!isError);
+    toast.hidden = false;
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 5000);
+  }
+
+  function parseChannel(raw) {
+    let s = String(raw).trim();
+    const m = s.match(/twitch\.tv\/(?:popout\/)?([a-z0-9_]+)/i);
+    if (m) s = m[1];
+    s = s.replace(/^@/, '').toLowerCase();
+    return /^[a-z0-9_]{2,25}$/.test(s) ? s : null;
+  }
+
+  const flat = () => rows.flat();
+  const nameOf = (uid) => tiles.get(uid).name;
+  const hasName = (name) => [...tiles.values()].some((t) => t.name === name);
+  const rowIndexOf = (uid) => rows.findIndex((r) => r.includes(uid));
+  const editOn = () => editing && !locked && mode === 'grid';
+  const activated = () => gesture || !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+
+  /* ---------- armado automático de filas ---------- */
+  function chunk(list, maxCols) {
+    const n = list.length;
+    if (!n) return [];
+    const r = Math.ceil(n / maxCols);
+    const base = Math.floor(n / r), extra = n % r;
+    const out = [];
+    let i = 0;
+    for (let k = 0; k < r; k++) {
+      const len = base + (k < extra ? 1 : 0);
+      out.push(list.slice(i, i + len));
+      i += len;
+    }
+    return out;
+  }
+
+  /* Elige la cantidad de columnas que da el video más grande con proporción 16:9. */
+  function bestCols(n) {
+    const W = stage.clientWidth || window.innerWidth;
+    const H = stage.clientHeight || window.innerHeight;
+    let best = 1, bestScale = 0;
+    for (let c = 1; c <= n; c++) {
+      const r = Math.ceil(n / c);
+      const s = Math.min(W / c / 16, H / r / 9);
+      if (s > bestScale + 1e-9) { best = c; bestScale = s; }
+    }
+    return best;
+  }
+
+  function reflow() {
+    const list = flat();
+    const c = colsSetting === 'auto' ? bestCols(list.length) : Math.max(1, Number(colsSetting));
+    rows = chunk(list, c);
+  }
+
+  /* ---------- reproductores ---------- */
+  function refreshTile(t) {
+    t.el.querySelector('.bar .name').textContent = t.name;
+    t.el.querySelector('.edit-name').textContent = t.name;
+    t.el.querySelector('[data-act="audio"]').setAttribute('aria-label', 'Sonido de ' + t.name);
+    t.el.querySelector('[data-act="focus"]').setAttribute('aria-label', 'Mostrar ' + t.name + ' en grande');
+    t.el.querySelector('[data-act="full"]').setAttribute('aria-label', 'Pantalla completa de ' + t.name);
+    t.el.querySelector('.bar [data-act="remove"]').setAttribute('aria-label', 'Quitar ' + t.name);
+    t.el.querySelector('[data-act="audio"]').title = 'Sonido en este stream';
+    t.el.querySelector('[data-act="focus"]').title = 'Mostrar en grande';
+    t.el.querySelector('[data-act="full"]').title = 'Pantalla completa';
+    t.el.querySelector('.bar [data-act="remove"]').title = 'Quitar';
+  }
+
+  function buildTile(t) {
+    const el = document.createElement('article');
+    el.className = 'tile';
+    el.dataset.uid = t.uid;
+    el.innerHTML =
+      '<div class="mount" id="p-' + t.uid + '"></div>' +
+      '<div class="bar">' +
+        '<span class="name"></span>' +
+        '<button type="button" data-act="audio"></button>' +
+        '<button type="button" data-act="focus">' + ICONS.focus + '</button>' +
+        '<button type="button" data-act="full">' + ICONS.full + '</button>' +
+        '<button type="button" class="remove" data-act="remove">' + ICONS.close + '</button>' +
+      '</div>' +
+      '<div class="edit" hidden>' +
+        '<div class="edit-top">' +
+          '<span class="grip" draggable="true" title="Arrastrar para intercambiar de lugar">' + ICONS.grip + 'Arrastrar</span>' +
+          '<button type="button" class="mini" data-act="pick">Mover</button>' +
+          '<button type="button" class="mini danger" data-act="remove">Quitar</button>' +
+        '</div>' +
+        '<div class="edit-name"></div>' +
+        '<form class="edit-form" autocomplete="off">' +
+          '<input type="text" placeholder="Cambiar por otro canal" spellcheck="false" autocapitalize="off" aria-label="Nuevo canal">' +
+          '<button type="submit" class="mini primary">Cambiar</button>' +
+        '</form>' +
+        '<button type="button" class="swap-here" data-act="swap" hidden>Intercambiar aquí</button>' +
+      '</div>';
+    t.el = el;
+    stage.appendChild(el);
+    refreshTile(t);
+
+    /* Todos arrancan en mute: así el navegador siempre permite el autoplay.
+       El sonido se le da al stream elegido apenas el usuario interactúa. */
+    const player = new Twitch.Player('p-' + t.uid, {
+      channel: t.name,
+      parent: parents,
+      width: '100%',
+      height: '100%',
+      autoplay: true,
+      muted: true
+    });
+    t.player = player;
+    player.addEventListener(Twitch.Player.READY, () => {
+      t.ready = true;
+      if (t.pending) { try { player.setChannel(t.pending); } catch (e) { /* ignorar */ } t.pending = null; }
+      try { player.play(); } catch (e) { /* ignorar */ }
+      applyAudio();
+    });
+    if (Twitch.Player.PLAYBACK_BLOCKED) {
+      player.addEventListener(Twitch.Player.PLAYBACK_BLOCKED, () => {
+        t.muted = true;
+        try { player.setMuted(true); player.play(); } catch (e) { /* ignorar */ }
+      });
+    }
+  }
+
+  function addStream(name) {
+    if (hasName(name)) {
+      const t = [...tiles.values()].find((x) => x.name === name);
+      t.el.classList.remove('flash'); void t.el.offsetWidth; t.el.classList.add('flash');
+      return 'dup';
+    }
+    if (tiles.size >= MAX) return 'full';
+    const t = { uid: 't' + (nextId++), name, el: null, player: null, ready: false, muted: true, pending: null };
+    tiles.set(t.uid, t);
+    buildTile(t);
+    if (manual && rows.length) {
+      const last = rows[rows.length - 1];
+      const cap = Math.max(...rows.map((r) => r.length));
+      if (last.length < cap) last.push(t.uid); else rows.push([t.uid]);
+    } else {
+      rows.push([t.uid]);
+    }
+    if (!audio) audio = t.uid;
+    return 'ok';
+  }
+
+  function removeStream(uid) {
+    const t = tiles.get(uid);
+    if (!t) return;
+    rows = rows.map((r) => r.filter((u) => u !== uid)).filter((r) => r.length);
+    tiles.delete(uid);
+    t.el.remove();
+    if (audio === uid) audio = flat()[0] || null;
+    if (focusUid === uid) focusUid = null;
+    if (picked === uid) picked = null;
+    if (!manual) reflow();
+    if (!tiles.size) { manual = false; editing = false; locked = false; mode = 'grid'; }
+    render();
+  }
+
+  function replaceChannel(uid, raw) {
+    if (locked) return;
+    const t = tiles.get(uid);
+    const name = parseChannel(raw);
+    if (!name) { setStatus('"' + raw + '" no es un nombre de canal válido.', true); return; }
+    if (name === t.name) return;
+    if (hasName(name)) { setStatus(name + ' ya está abierto en otro lugar del grid.', true); return; }
+    t.name = name;
+    if (t.ready) {
+      try { t.player.setChannel(name); } catch (e) { /* ignorar */ }
+      setTimeout(() => { try { t.player.play(); } catch (e) { /* ignorar */ } }, 700);
+    } else {
+      t.pending = name;
+    }
+    refreshTile(t);
+    persist();
+    setStatus('Ahora se ve ' + name + ' en ese lugar.');
+  }
+
+  function swapTiles(a, b) {
+    if (locked || a === b) return;
+    const ra = rowIndexOf(a), rb = rowIndexOf(b);
+    if (ra < 0 || rb < 0) return;
+    const ia = rows[ra].indexOf(a), ib = rows[rb].indexOf(b);
+    rows[ra][ia] = b;
+    rows[rb][ib] = a;
+    manual = true;
+    render();
+  }
+
+  function swapRows(i, j) {
+    if (locked || i === j || i < 0 || j < 0 || i >= rows.length || j >= rows.length) return;
+    [rows[i], rows[j]] = [rows[j], rows[i]];
+    manual = true;
+    render();
+  }
+
+  /* ---------- sonido ---------- */
+  function applyAudio() {
+    const can = activated();
+    tiles.forEach((t) => {
+      const on = t.uid === audio;
+      const wantMuted = !(on && can);
+      if (t.ready && t.muted !== wantMuted) {
+        try {
+          t.player.setMuted(wantMuted);
+          t.muted = wantMuted;
+          if (!wantMuted) t.player.play();
+        } catch (e) { /* ignorar */ }
+      }
+      t.el.classList.toggle('has-audio', on);
+      const b = t.el.querySelector('.bar [data-act="audio"]');
+      b.innerHTML = on ? ICONS.volume : ICONS.muted;
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  /* ---------- disposición ---------- */
+  function layout() {
+    const list = flat();
+    const n = list.length;
+    const focused = mode === 'focus' && n > 1;
+
+    if (focused) {
+      if (!focusUid || !tiles.has(focusUid)) focusUid = (audio && tiles.has(audio)) ? audio : list[0];
+      const side = Math.round(C * 0.22);
+      stage.style.setProperty('--rows', 'repeat(' + (n - 1) + ', minmax(0, 1fr))');
+      let r = 1;
+      list.forEach((uid) => {
+        const el = tiles.get(uid).el;
+        if (uid === focusUid) {
+          el.style.setProperty('--gc', '1 / ' + (C - side + 1));
+          el.style.setProperty('--gr', '1 / span ' + (n - 1));
+        } else {
+          el.style.setProperty('--gc', (C - side + 1) + ' / ' + (C + 1));
+          el.style.setProperty('--gr', String(r++));
+        }
+      });
+    } else {
+      stage.style.setProperty('--rows', 'repeat(' + Math.max(1, rows.length) + ', minmax(0, 1fr))');
+      rows.forEach((row, ri) => {
+        const L = row.length;
+        row.forEach((uid, i) => {
+          const el = tiles.get(uid).el;
+          el.style.setProperty('--gc', (Math.round(i * C / L) + 1) + ' / ' + (Math.round((i + 1) * C / L) + 1));
+          el.style.setProperty('--gr', String(ri + 1));
+        });
+      });
+    }
+    list.forEach((uid, i) => { tiles.get(uid).el.style.order = String(i); });   // orden en celular
+    tiles.forEach((t) => {
+      t.el.querySelector('[data-act="focus"]').setAttribute('aria-pressed', String(focused && t.uid === focusUid));
+    });
+  }
+
+  function renderRowTools() {
+    rowtools.textContent = '';
+    const show = editOn() && rows.length > 1;
+    rowtools.hidden = !show;
+    if (!show) return;
+    rowtools.style.gridTemplateRows = 'repeat(' + rows.length + ', minmax(0, 1fr))';
+    rows.forEach((row, ri) => {
+      const d = document.createElement('div');
+      d.className = 'rowtool';
+      d.dataset.row = String(ri);
+      d.style.gridRow = String(ri + 1);
+      d.innerHTML =
+        '<button type="button" data-rowact="up" title="Subir fila" aria-label="Subir fila ' + (ri + 1) + '"' + (ri === 0 ? ' disabled' : '') + '>' + ICONS.up + '</button>' +
+        '<span class="rgrip" draggable="true" data-row="' + ri + '" title="Arrastrar para intercambiar filas">' + ICONS.grip + '<b>' + (ri + 1) + '</b></span>' +
+        '<button type="button" data-rowact="down" title="Bajar fila" aria-label="Bajar fila ' + (ri + 1) + '"' + (ri === rows.length - 1 ? ' disabled' : '') + '>' + ICONS.down + '</button>';
+      rowtools.appendChild(d);
+    });
+  }
+
+  function applyUI() {
+    const on = editOn();
+    document.body.classList.toggle('editing', on);
+    document.body.classList.toggle('locked', locked);
+    tiles.forEach((t) => {
+      t.el.querySelector('.edit').hidden = !on;
+      t.el.querySelector('.swap-here').hidden = !(on && picked && picked !== t.uid);
+      t.el.classList.toggle('picked', on && picked === t.uid);
+      t.el.querySelector('[data-act="pick"]').textContent = (picked === t.uid) ? 'Cancelar' : 'Mover';
+    });
+  }
+
+  /* ---------- persistencia ---------- */
+  function serialize() {
+    if (!tiles.size) return '';
+    if (manual) return rows.map((r) => r.map(nameOf).join(',')).join('/') + '/';
+    return flat().map(nameOf).join(',');
+  }
+
+  function persist() {
+    const s = serialize();
+    try { history.replaceState(null, '', s ? '#' + s : location.pathname + location.search); } catch (e) { /* ignorar */ }
+    try {
+      localStorage.setItem(KEY_LAYOUT, s);
+      localStorage.setItem(KEY_PREFS, JSON.stringify({ locked, cols: colsSetting }));
+    } catch (e) { /* ignorar */ }
+  }
+
+  /* ---------- render general ---------- */
+  function render() {
+    const n = tiles.size;
+    if (locked) { editing = false; picked = null; }
+    emptyEl.hidden = n > 0;
+    $('count').textContent = n ? n + ' / ' + MAX : '';
+
+    input.disabled = locked;
+    $('add-btn').disabled = locked;
+    input.placeholder = locked ? 'Layout bloqueado' : 'nombre del streamer y Enter';
+    colsSel.value = manual ? 'custom' : colsSetting;
+    colsSel.disabled = locked || !n;
+    $('clear').disabled = locked || !n;
+    $('copy').disabled = !n;
+    $('playall').disabled = !n;
+
+    btnLock.disabled = !n;
+    btnLock.setAttribute('aria-pressed', String(locked));
+    btnLock.innerHTML = (locked ? ICONS.lock : ICONS.unlock) + (locked ? 'Bloqueado' : 'Bloquear');
+    btnEdit.disabled = locked || !n;
+    btnEdit.setAttribute('aria-pressed', String(editing && !locked));
+    btnEdit.textContent = (editing && !locked) ? 'Listo' : 'Editar';
+    $('layout').querySelectorAll('button').forEach((b) => {
+      b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
+      b.disabled = locked;
+    });
+
+    layout();
+    renderRowTools();
+    applyUI();
+    applyAudio();
+    persist();
+  }
+
+  /* ---------- agregar canales ---------- */
+  function submit(raw) {
+    if (locked) return;
+    if (!window.Twitch || !Twitch.Player) {
+      setStatus('No cargó el reproductor de Twitch. Revisá tu conexión y recargá la página.', true);
+      return;
+    }
+    const tokens = String(raw).split(/[\s,]+/).filter(Boolean);
+    if (!tokens.length) return;
+    const added = [], dups = [], bad = [];
+    let full = false;
+    for (const tok of tokens) {
+      const name = parseChannel(tok);
+      if (!name) { bad.push(tok); continue; }
+      const r = addStream(name);
+      if (r === 'ok') added.push(name);
+      else if (r === 'dup') dups.push(name);
+      else full = true;
+    }
+    if (!manual) reflow();
+    render();
+    const notes = [];
+    if (bad.length) notes.push('"' + bad.join('", "') + '" no es un nombre de canal válido');
+    if (dups.length) notes.push(dups.join(', ') + ' ya está abierto');
+    if (full) notes.push('El máximo es ' + MAX + ' streams');
+    if (notes.length) setStatus(notes.join('. ') + '.', bad.length > 0 || full);
+    if (added.length || dups.length) input.value = '';
+  }
+
+  /* ---------- eventos ---------- */
+  form.addEventListener('submit', (e) => { e.preventDefault(); submit(input.value); });
+
+  stage.addEventListener('click', (e) => {
+    const rb = e.target.closest('[data-rowact]');
+    if (rb) {
+      const ri = Number(rb.closest('.rowtool').dataset.row);
+      swapRows(ri, rb.dataset.rowact === 'up' ? ri - 1 : ri + 1);
+      return;
+    }
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const tile = btn.closest('.tile');
+    const uid = tile.dataset.uid;
+    switch (btn.dataset.act) {
+      case 'audio':
+        audio = uid; applyAudio(); break;
+      case 'remove':
+        if (!locked) removeStream(uid);
+        break;
+      case 'focus':
+        if (locked) break;
+        if (mode === 'focus' && focusUid === uid) mode = 'grid';
+        else { mode = 'focus'; focusUid = uid; editing = false; picked = null; }
+        render();
+        break;
+      case 'full': {
+        const p = tile.requestFullscreen && tile.requestFullscreen();
+        if (p && p.catch) p.catch(() => setStatus('La pantalla completa no está disponible acá. Usá el botón del reproductor.', true));
+        break;
+      }
+      case 'pick':
+        if (locked) break;
+        picked = (picked === uid) ? null : uid;
+        applyUI();
+        if (picked) setStatus('Ahora tocá "Intercambiar aquí" en el stream con el que querés cambiarlo de lugar.');
+        break;
+      case 'swap':
+        if (picked && picked !== uid) { const a = picked; picked = null; swapTiles(a, uid); }
+        break;
+      default: break;
+    }
+  });
+
+  stage.addEventListener('submit', (e) => {
+    const f = e.target.closest('.edit-form');
+    if (!f) return;
+    e.preventDefault();
+    const inp = f.querySelector('input');
+    if (!inp.value.trim()) return;
+    replaceChannel(f.closest('.tile').dataset.uid, inp.value);
+    inp.value = '';
+  });
+
+  /* Arrastrar y soltar (mouse). En pantallas táctiles se usa Mover + Intercambiar aquí. */
+  function dragTarget(e) {
+    if (!dragging || !e.target.closest) return null;
+    const tileEl = e.target.closest('.tile');
+    const rtEl = e.target.closest('.rowtool');
+    if (dragging.kind === 'tile') {
+      if (tileEl && tileEl.dataset.uid !== dragging.uid) return { kind: 'tile', uid: tileEl.dataset.uid };
+    } else {
+      const ri = tileEl ? rowIndexOf(tileEl.dataset.uid) : rtEl ? Number(rtEl.dataset.row) : -1;
+      if (ri >= 0 && ri !== dragging.index) return { kind: 'row', index: ri };
+    }
+    return null;
+  }
+
+  function clearDrop() {
+    stage.querySelectorAll('.drop').forEach((el) => el.classList.remove('drop'));
+    dropKey = '';
+  }
+
+  function endDrag() {
+    dragging = null;
+    clearDrop();
+    stage.querySelectorAll('.dragging').forEach((el) => el.classList.remove('dragging'));
+  }
+
+  stage.addEventListener('dragstart', (e) => {
+    if (locked) { e.preventDefault(); return; }
+    const tg = e.target.closest && e.target.closest('.grip');
+    const rg = e.target.closest && e.target.closest('.rgrip');
+    if (tg) {
+      const tile = tg.closest('.tile');
+      dragging = { kind: 'tile', uid: tile.dataset.uid };
+      try { e.dataTransfer.setDragImage(tile.querySelector('.edit'), 24, 24); } catch (err) { /* ignorar */ }
+      setTimeout(() => tile.classList.add('dragging'), 0);
+    } else if (rg) {
+      dragging = { kind: 'row', index: Number(rg.dataset.row) };
+    } else {
+      return;
+    }
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'multiview');
+  });
+
+  const onDragOver = (e) => {
+    const t = dragTarget(e);
+    if (!t) { if (dropKey) clearDrop(); return; }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const key = t.kind + ':' + (t.kind === 'tile' ? t.uid : t.index);
+    if (key === dropKey) return;
+    clearDrop();
+    dropKey = key;
+    if (t.kind === 'tile') tiles.get(t.uid).el.classList.add('drop');
+    else rows[t.index].forEach((uid) => tiles.get(uid).el.classList.add('drop'));
+  };
+  stage.addEventListener('dragenter', onDragOver);
+  stage.addEventListener('dragover', onDragOver);
+  stage.addEventListener('dragleave', (e) => { if (!stage.contains(e.relatedTarget)) clearDrop(); });
+  stage.addEventListener('drop', (e) => {
+    const t = dragTarget(e);
+    if (!t) return;
+    e.preventDefault();
+    const d = dragging;
+    endDrag();
+    if (t.kind === 'tile') swapTiles(d.uid, t.uid);
+    else swapRows(d.index, t.index);
+  });
+  document.addEventListener('dragend', endDrag);
+
+  $('layout').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-mode]');
+    if (!b || locked) return;
+    mode = b.dataset.mode;
+    if (mode === 'focus') { editing = false; picked = null; }
+    if (mode === 'focus' && tiles.size < 2) setStatus('Agregá un segundo stream para usar el modo Foco.');
+    render();
+  });
+
+  colsSel.addEventListener('change', () => {
+    if (locked || colsSel.value === 'custom') return;
+    colsSetting = colsSel.value;
+    manual = false;
+    reflow();
+    render();
+  });
+
+  btnEdit.addEventListener('click', () => {
+    if (locked) return;
+    editing = !editing;
+    picked = null;
+    if (editing) mode = 'grid';
+    render();
+  });
+
+  btnLock.addEventListener('click', () => {
+    if (!tiles.size) return;
+    locked = !locked;
+    if (locked) { manual = true; editing = false; picked = null; endDrag(); }
+    render();
+    setStatus(locked ? 'Layout bloqueado: las posiciones quedan fijas.' : 'Layout desbloqueado.');
+  });
+
+  $('playall').addEventListener('click', () => {
+    tiles.forEach((t) => { try { t.player.play(); } catch (e) { /* ignorar */ } });
+  });
+
+  $('clear').addEventListener('click', () => {
+    if (locked) return;
+    tiles.forEach((t) => t.el.remove());
+    tiles.clear();
+    rows = []; audio = null; focusUid = null; picked = null;
+    manual = false; editing = false; mode = 'grid';
+    render();
+  });
+
+  $('copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      setStatus('Enlace copiado. Quien lo abra ve los mismos streams en las mismas posiciones.');
+    } catch (e) {
+      setStatus('No se pudo copiar solo. El enlace está en la barra de direcciones.', true);
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (e.key === '/' && tag !== 'INPUT' && !e.ctrlKey && !e.metaKey && !input.disabled) {
+      e.preventDefault(); input.focus();
+    }
+    if (e.key === 'Escape' && picked) { picked = null; applyUI(); }
+  });
+
+  /* El primer clic o tecla habilita el sonido del stream elegido. */
+  ['pointerdown', 'keydown'].forEach((ev) => {
+    window.addEventListener(ev, () => { if (!gesture) { gesture = true; applyAudio(); } }, true);
+  });
+
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (!manual && !locked && colsSetting === 'auto' && tiles.size) { reflow(); layout(); renderRowTools(); }
+    }, 150);
+  });
+
+  /* ---------- arranque ---------- */
+  EXAMPLES.forEach((n) => {
+    const c = document.createElement('button');
+    c.type = 'button'; c.className = 'chip'; c.textContent = n;
+    c.addEventListener('click', () => submit(n));
+    $('chips').appendChild(c);
+  });
+
+  if (location.protocol === 'file:' || !location.hostname) {
+    parents.push('localhost');
+    const notice = $('notice');
+    notice.hidden = false;
+    notice.innerHTML = 'Twitch solo reproduce en páginas publicadas en la web. Subí esta página a un hosting (por ejemplo Netlify Drop) o abrila desde un servidor local con <code>python3 -m http.server 8000</code>.';
+  }
+
+  let wasLocked = false;
+  try {
+    const p = JSON.parse(localStorage.getItem(KEY_PREFS) || '{}') || {};
+    if (p.cols === 'auto' || /^([1-9]|10)$/.test(String(p.cols))) colsSetting = String(p.cols);
+    wasLocked = !!p.locked;
+  } catch (e) { /* ignorar */ }
+
+  let saved = '';
+  try { saved = decodeURIComponent(location.hash.slice(1)); } catch (e) { saved = location.hash.slice(1); }
+  if (!saved) { try { saved = localStorage.getItem(KEY_LAYOUT) || ''; } catch (e) { saved = ''; } }
+
+  const seen = new Set();
+  const initialRows = saved.split('/')
+    .map((part) => part.split(/[,\s]+/).map(parseChannel).filter((n) => {
+      if (!n || seen.has(n) || seen.size >= MAX) return false;
+      seen.add(n);
+      return true;
+    }))
+    .filter((r) => r.length);
+
+  if (initialRows.length) {
+    if (window.Twitch && Twitch.Player) {
+      manual = saved.includes('/');
+      initialRows.forEach((names) => {
+        const row = [];
+        names.forEach((name) => {
+          addStream(name);
+          row.push([...tiles.values()].find((t) => t.name === name).uid);
+        });
+        // addStream ya agregó cada uid como fila propia; se reemplazan por la fila real
+        rows = rows.filter((r) => !(r.length === 1 && row.includes(r[0])));
+        rows.push(row);
+      });
+      if (!manual) reflow();
+      locked = wasLocked;
+    } else {
+      setStatus('No cargó el reproductor de Twitch. Revisá tu conexión y recargá la página.', true);
+    }
+  }
+  render();
+  if (!locked) input.focus();
+})();
+</script>
+</body>
+</html>
