@@ -9,10 +9,10 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
 <script src="https://embed.twitch.tv/embed/v1.js"></script>
 <style>
-/* Layout: barra de controles arriba y, debajo, un tablero de 5 columnas fijas.
-   Cada recuadro tiene una barra con su campo de texto (para cambiar de canal) y,
-   debajo, el video en 16:9. Los reproductores nunca se mueven en el DOM: reordenar
-   solo cambia coordenadas CSS, así que no se recarga ningún stream. */
+/* Layout: barra de controles arriba y, debajo, un tablero con una columna angosta a la
+   izquierda (controles de cada fila) y 5 columnas fijas de recuadros. Cada recuadro tiene
+   una barra con su campo de texto y, debajo, el video en 16:9. Los reproductores nunca se
+   mueven en el DOM: reordenar solo cambia coordenadas CSS, así que no se recarga ningún stream. */
 :root {
   --bg: #0d0f14;
   --panel: #151821;
@@ -86,12 +86,7 @@ button, input, select { font: inherit; color: inherit; }
 .btn.primary:hover:not(:disabled) { background: #bbb0ff; }
 .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
-
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-.seg button { background: var(--panel-2); border: 0; padding: 8px 12px; cursor: pointer; }
-.seg button + button { border-left: 1px solid var(--line); }
-.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.seg button:disabled { opacity: .45; cursor: not-allowed; }
+#fuzz { font-variant-numeric: tabular-nums; }
 
 .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
 .count { color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -139,6 +134,7 @@ svg.i circle { fill: currentColor; stroke: none; }
 .tile.has-audio { border-color: var(--accent); }
 .tile.flash { animation: flash .9s ease; }
 @keyframes flash { 0%, 60% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.tile:fullscreen { border-radius: 0; border: 0; }
 
 /* barra con el campo de texto de cada recuadro */
 .head {
@@ -161,8 +157,7 @@ svg.i circle { fill: currentColor; stroke: none; }
 .head button:hover { background: var(--panel-2); color: var(--fg); }
 .head button[aria-pressed="true"] { color: var(--accent); }
 .head button.remove:hover { color: var(--danger); }
-body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { display: none; }
-@container (max-width: 300px) { .head [data-act="focus"] { display: none; } }
+body.locked .head [data-act="remove"] { display: none; }
 @container (max-width: 240px) { .head [data-act="reload"] { display: none; } }
 
 .video { position: relative; flex: 1; min-height: 0; background: #000; }
@@ -185,7 +180,8 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px;
   padding: 5px 9px; cursor: pointer; font-size: 12.5px; white-space: nowrap;
 }
-.mini:hover { border-color: #3b4254; background: #232837; }
+.mini:hover:not(:disabled) { border-color: #3b4254; background: #232837; }
+.mini:disabled { opacity: .45; cursor: not-allowed; }
 .edit-name {
   margin: auto; font: 600 clamp(14px, 1.8vw, 22px)/1.1 var(--font-display);
   text-align: center; overflow-wrap: anywhere;
@@ -201,23 +197,20 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
 .tile.drop .edit { background: rgba(169,155,255,.35); }
 .tile.dragging { opacity: .45; }
 
-/* ---------- herramientas de fila ---------- */
-.rowtools {
-  position: absolute; inset: 0; z-index: 6;
-  display: grid; grid-template-columns: minmax(0, 1fr); pointer-events: none;
-}
-.rowtool {
-  grid-column: 1; pointer-events: auto; justify-self: start; align-self: center;
-  margin-left: 10px; padding: 3px; margin-top: calc(var(--head) / 2);
+/* ---------- controles de cada fila (columna izquierda) ---------- */
+.rowbar {
+  grid-column: 1; justify-self: center; align-self: center;
+  margin-top: calc(var(--head) / 2); padding: 3px 2px;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  background: var(--panel); border: 1px solid var(--accent); border-radius: 9px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 9px;
 }
-.rowtool button {
-  width: 26px; height: 22px; display: grid; place-items: center;
-  background: transparent; border: 0; border-radius: 6px; cursor: pointer;
+body.editing .rowbar { border-color: var(--accent); }
+.rowbar button {
+  width: 26px; height: 24px; display: grid; place-items: center;
+  background: transparent; border: 0; border-radius: 6px; cursor: pointer; color: var(--muted);
 }
-.rowtool button:hover:not(:disabled) { background: var(--panel-2); color: var(--accent); }
-.rowtool button:disabled { opacity: .3; cursor: not-allowed; }
+.rowbar button:hover:not(:disabled) { background: var(--panel-2); color: var(--accent); }
+.rowbar button:disabled { opacity: .3; cursor: not-allowed; }
 .rgrip {
   display: flex; flex-direction: column; align-items: center; gap: 1px;
   padding: 3px 4px; cursor: grab; user-select: none; font-size: 11px; line-height: 1;
@@ -240,7 +233,7 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
 }
 .chip:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ---------- sugerencias del banco ---------- */
+/* ---------- menús flotantes (sugerencias del banco y lista de teams) ---------- */
 .suggest {
   position: fixed; z-index: 70; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--accent); border-radius: 10px;
@@ -258,7 +251,7 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
 
 /* ---------- panel del banco ---------- */
 .bankpanel {
-  position: fixed; z-index: 60; top: 0; right: 0; bottom: 0; width: min(380px, 100vw);
+  position: fixed; z-index: 60; top: 0; right: 0; bottom: 0; width: min(400px, 100vw);
   display: flex; flex-direction: column; gap: 10px; padding: 12px;
   padding-top: max(12px, env(safe-area-inset-top, 0px));
   background: var(--panel); border-left: 1px solid var(--line);
@@ -267,28 +260,26 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
 .bp-head { display: flex; align-items: center; justify-content: space-between; font: 600 15px var(--font-display); }
 .bp-head button { background: transparent; border: 0; cursor: pointer; width: 30px; height: 30px; border-radius: 7px; display: grid; place-items: center; }
 .bp-head button:hover { background: var(--panel-2); }
+.bp-link { display: flex; gap: 6px; }
+.bp-link input, .bp-search {
+  flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+}
+.bp-link input:focus, .bp-search:focus { outline: 0; border-color: var(--accent); }
 .bp-info { color: var(--muted); font-size: 13px; }
 .bp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.bp-search {
-  width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
-}
-.bp-search:focus { outline: 0; border-color: var(--accent); }
-.bp-groups { display: flex; flex-wrap: wrap; gap: 6px; }
-.bp-groups button {
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px;
-  padding: 4px 11px; cursor: pointer; font-size: 12.5px;
-}
-.bp-groups button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.bp-groups button:disabled { opacity: .45; cursor: not-allowed; }
+.bp-help { color: var(--muted); font-size: 12.5px; }
+.bp-help summary { cursor: pointer; }
+.bp-help ol { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+.bp-help code { background: rgba(255,255,255,.08); border-radius: 4px; padding: 0 5px; }
+.bp-title { font: 600 12px var(--font-display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.bp-teams { display: flex; flex-direction: column; gap: 2px; max-height: 34vh; overflow-y: auto; }
 .bp-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.bp-row {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px;
-}
+.bp-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; }
 .bp-row:hover { background: var(--panel-2); }
 .bp-row .who { flex: 1; min-width: 0; }
 .bp-row b { font: 600 13px var(--font-display); display: block; }
 .bp-row small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bp-row .tag { color: var(--accent); font-size: 11px; }
+.bp-row .tag { color: var(--accent); font-size: 11px; white-space: nowrap; }
 .bp-empty { color: var(--muted); padding: 12px 4px; font-size: 13px; }
 
 /* ---------- celular: todo en una columna ---------- */
@@ -304,9 +295,8 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   .tile { flex: none; }
   .video { flex: none; aspect-ratio: 16 / 9; }
   .empty { position: static; padding: 48px 8px; }
-  .rowtools { display: none !important; }
+  .rowbar { display: none !important; }
   .tools { margin-left: 0; }
-  #layout { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tile.flash { animation: none; }
@@ -328,13 +318,10 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
 
     <div class="tools">
       <span class="count" id="count" aria-live="polite"></span>
-      <div class="seg" id="layout" role="group" aria-label="Disposición">
-        <button type="button" data-mode="grid" aria-pressed="true">Grid</button>
-        <button type="button" data-mode="focus" aria-pressed="false">Foco</button>
-      </div>
       <button class="btn" type="button" id="edit" aria-pressed="false">Editar</button>
       <button class="btn" type="button" id="lock" aria-pressed="false">Bloquear</button>
       <button class="btn" type="button" id="bank-btn" aria-pressed="false">Banco</button>
+      <button class="btn" type="button" id="fuzz" aria-pressed="false" title="Cada 10 minutos renueva los streams con canales del banco que estén en vivo">Fuzzer</button>
       <button class="btn" type="button" id="playall">Reproducir todo</button>
       <button class="btn" type="button" id="copy">Copiar enlace</button>
       <button class="btn" type="button" id="clear">Quitar todo</button>
@@ -346,12 +333,10 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   <main class="stage" id="stage" aria-label="Streams">
     <div class="empty" id="empty">
       <h1>Mirá varios streams a la vez</h1>
-      <p>Escribí un canal de Twitch arriba y apretá Enter. Entran hasta 20, en filas de 5. Al apretar la barra espaciadora se pone la coma sola, así podés escribir varios nombres seguidos.</p>
+      <p>Escribí un canal de Twitch arriba y apretá Enter. Entran hasta 20, en filas de 5. Al apretar la barra espaciadora se pone la coma sola, así podés escribir varios nombres seguidos. Con un Google Sheet conectado en Banco, cargás un team entero con un clic.</p>
       <div class="chips" id="chips"></div>
     </div>
-    <div class="board" id="board" hidden>
-      <div class="rowtools" id="rowtools" hidden></div>
-    </div>
+    <div class="board" id="board" hidden></div>
   </main>
 </div>
 
@@ -360,48 +345,68 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     <span>Banco de streamers</span>
     <button type="button" id="bp-close" aria-label="Cerrar el banco"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
+  <form class="bp-link" id="bp-form" autocomplete="off">
+    <input id="bp-link" type="text" placeholder="Pegá el link de tu Google Sheet" aria-label="Link del Google Sheet" spellcheck="false">
+    <button class="btn primary" type="submit" id="bp-connect">Conectar</button>
+  </form>
   <div class="bp-info" id="bp-info"></div>
   <div class="bp-actions">
-    <button class="btn" type="button" id="bp-import">Importar Excel o CSV</button>
-    <button class="btn" type="button" id="bp-reset" hidden>Volver al banco.xlsx del sitio</button>
-    <input type="file" id="bankfile" accept=".xlsx,.xls,.ods,.csv" hidden>
+    <button class="btn" type="button" id="bp-refresh" hidden>Actualizar</button>
+    <button class="btn" type="button" id="bp-disconnect" hidden>Desconectar</button>
   </div>
-  <input class="bp-search" id="bp-search" type="search" placeholder="Buscar canal, nombre o grupo" aria-label="Buscar en el banco" autocomplete="off">
-  <div class="bp-groups" id="bp-groups"></div>
+  <details class="bp-help" id="bp-help">
+    <summary>Cómo armar la hoja</summary>
+    <ol>
+      <li>Columnas: <code>Canal de Twitch</code>, <code>Nombre</code>, <code>Team</code>, <code>Notas</code>, <code>Activo</code>.</li>
+      <li>Un team son hasta 5 streamers con el mismo nombre en <code>Team</code>: ocupan una fila.</li>
+      <li>Compartir > Cualquier persona con el enlace > Lector (o Archivo > Compartir > Publicar en la Web).</li>
+      <li>Pegá el link acá y apretá Conectar. Los cambios en la hoja se ven al tocar Actualizar o al reabrir la página.</li>
+    </ol>
+  </details>
+  <div class="bp-title">Teams</div>
+  <div class="bp-teams" id="bp-teams"></div>
+  <input class="bp-search" id="bp-search" type="search" placeholder="Buscar canal, nombre o team" aria-label="Buscar en el banco" autocomplete="off">
   <div class="bp-list" id="bp-list"></div>
 </aside>
 
 <div class="suggest" id="suggest" role="listbox" hidden></div>
+<div class="suggest" id="teammenu" role="menu" hidden></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script>
 (() => {
   'use strict';
 
+  /* Opcional: pegá acá el link de tu Google Sheet para que la página lo use siempre,
+     en cualquier navegador. También se puede conectar desde el panel Banco. */
+  const DEFAULT_SHEET = '';
+
   const MAX = 20;
   const COLS = 5;                       // ancho fijo del grid: 5 streams por fila
-  const C = 360;                        // columnas finas, solo para el modo Foco
+  const GUTTER = 34;                    // columna angosta con los controles de cada fila
   const HEAD = 34;                      // alto de la barra con el campo de cada recuadro
   const SETTLE_MS = 90000;              // ventana en la que se reanudan pausas automáticas
+  const FUZZ_MS = 10 * 60 * 1000;       // cada cuánto renueva el Fuzzer
+  const FUZZ_TRIES = 6;                 // candidatos que prueba por recuadro
+  const FUZZ_WORKERS = 4;               // recuadros que prueba a la vez
+  const PROBE_MS = 12000;               // espera máxima para saber si un canal está en vivo
   const EXAMPLES = ['ibai', 'auronplay', 'shroud', 'pokimane'];
   const KEY_LAYOUT = 'twitch-multiview:layout:v2';
   const KEY_PREFS = 'twitch-multiview:prefs:v2';
-  const KEY_BANK = 'twitch-multiview:bank:v3';
-  const XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  const KEY_SHEET = 'twitch-multiview:sheet:v4';
+  const KEY_BANK = 'twitch-multiview:bank:v4';
 
   const $ = (id) => document.getElementById(id);
-  const stage = $('stage'), board = $('board'), emptyEl = $('empty'), rowtools = $('rowtools'), toast = $('toast');
+  const stage = $('stage'), board = $('board'), emptyEl = $('empty'), toast = $('toast');
   const form = $('add-form'), input = $('channel');
-  const btnEdit = $('edit'), btnLock = $('lock'), btnBank = $('bank-btn');
-  const sg = $('suggest'), panel = $('bankpanel');
+  const btnEdit = $('edit'), btnLock = $('lock'), btnBank = $('bank-btn'), btnFuzz = $('fuzz');
+  const sg = $('suggest'), tm = $('teammenu'), panel = $('bankpanel');
 
   /* ---------- estado ---------- */
-  const tiles = new Map();   // uid -> { uid, name, el, player, ready, muted, offline, userPaused, retries, readyAt, retryTimer }
+  const tiles = new Map();   // uid -> { uid, name, el, player, ready, muted, offline, userPaused, retries, readyAt, retryTimer, probe }
   let rows = [];             // filas del grid: [[uid, ...hasta 5], ...]
   let nextId = 1;
   let audio = null;          // uid del stream con sonido
-  let focusUid = null;       // uid del stream grande en modo Foco
-  let mode = 'grid';         // 'grid' | 'focus'
   let manual = false;        // true cuando el usuario acomodó a mano o bloqueó
   let locked = false;
   let editing = false;
@@ -412,9 +417,13 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   let toastTimer = 0;
   let nextMountAt = 0;       // para escalonar la carga de reproductores
 
-  let bank = [];             // [{ channel, name, group, notes, search }]
-  let bankInfo = { kind: 'none', label: '' };
-  let siteBankFound = false;
+  let bank = [];             // [{ channel, name, team, notes, search }]
+  let sheetLink = '';
+  let bankUpdated = null;
+
+  let fuzzOn = false;
+  let fuzzBusy = false;
+  let fuzzNext = 0;
 
   /* Twitch solo reproduce dentro de páginas cuyo dominio figure como "parent". */
   const parents = (() => {
@@ -427,13 +436,14 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   const ICONS = {
     volume: '<svg class="i" viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M16 8.5a5 5 0 0 1 0 7"/><path d="M19 6a9 9 0 0 1 0 12"/></svg>',
     muted: '<svg class="i" viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>',
-    focus: '<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="12" height="16" rx="1.5"/><rect x="17.5" y="4" width="3.5" height="6.5" rx="1"/><rect x="17.5" y="13.5" width="3.5" height="6.5" rx="1"/></svg>',
     reload: '<svg class="i" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/></svg>',
     full: '<svg class="i" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+    fullExit: '<svg class="i" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>',
     close: '<svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     grip: '<svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>',
     up: '<svg class="i" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>',
     down: '<svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+    team: '<svg class="i" viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>',
     lock: '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
     unlock: '<svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-1.8"/></svg>'
   };
@@ -445,7 +455,7 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     toast.textContent = msg;
     toast.classList.toggle('error', !!isError);
     toast.hidden = false;
-    toastTimer = setTimeout(() => { toast.hidden = true; }, 5000);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 5500);
   }
 
   function parseChannel(raw) {
@@ -461,8 +471,17 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   const nameOf = (uid) => tiles.get(uid).name;
   const findByName = (name) => [...tiles.values()].find((t) => t.name === name);
   const rowIndexOf = (uid) => rows.findIndex((r) => r.includes(uid));
-  const editOn = () => editing && !locked && mode === 'grid';
+  const editOn = () => editing && !locked;
   const activated = () => gesture || !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+
+  function shuffle(list) {
+    const a = list.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
 
   function flash(t) {
     t.el.classList.remove('flash'); void t.el.offsetWidth; t.el.classList.add('flash');
@@ -483,9 +502,7 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     inp.setAttribute('aria-label', 'Canal de este recuadro (' + t.name + '). Escribí otro y apretá Enter para cambiarlo');
     const set = (sel, label) => { const b = t.el.querySelector(sel); b.setAttribute('aria-label', label); b.title = label; };
     set('[data-act="audio"]', 'Sonido en ' + t.name);
-    set('[data-act="focus"]', 'Mostrar ' + t.name + ' en grande');
     set('[data-act="reload"]', 'Recargar ' + t.name);
-    set('[data-act="full"]', 'Pantalla completa de ' + t.name);
     set('.head [data-act="remove"]', 'Quitar ' + t.name);
   }
 
@@ -497,7 +514,6 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
       '<div class="head">' +
         '<input class="chan" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off">' +
         '<button type="button" data-act="audio"></button>' +
-        '<button type="button" data-act="focus">' + ICONS.focus + '</button>' +
         '<button type="button" data-act="reload">' + ICONS.reload + '</button>' +
         '<button type="button" data-act="full">' + ICONS.full + '</button>' +
         '<button type="button" class="remove" data-act="remove">' + ICONS.close + '</button>' +
@@ -544,7 +560,12 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
       applyAudio();
     });
     [P.PLAY, P.PLAYING].forEach((ev) => {
-      if (ev) player.addEventListener(ev, () => { if (mine()) t.userPaused = false; });
+      if (!ev) return;
+      player.addEventListener(ev, () => {
+        if (!mine()) return;
+        t.userPaused = false;
+        if (ev === P.PLAYING && t.probe) t.probe(true);       // el Fuzzer: está en vivo
+      });
     });
     if (P.PAUSE) {
       player.addEventListener(P.PAUSE, () => {
@@ -554,8 +575,21 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
         schedulePlay(t);
       });
     }
-    if (P.OFFLINE) player.addEventListener(P.OFFLINE, () => { if (mine()) t.offline = true; });
-    if (P.ONLINE) player.addEventListener(P.ONLINE, () => { if (mine()) { t.offline = false; schedulePlay(t, 600); } });
+    if (P.OFFLINE) {
+      player.addEventListener(P.OFFLINE, () => {
+        if (!mine()) return;
+        t.offline = true;
+        if (t.probe) t.probe(false);                          // el Fuzzer: no está en vivo
+      });
+    }
+    if (P.ONLINE) {
+      player.addEventListener(P.ONLINE, () => {
+        if (!mine()) return;
+        t.offline = false;
+        if (t.probe) t.probe(true);
+        schedulePlay(t, 600);
+      });
+    }
     if (P.PLAYBACK_BLOCKED) {
       player.addEventListener(P.PLAYBACK_BLOCKED, () => {
         if (!mine()) return;
@@ -596,37 +630,45 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   setInterval(() => resumePaused(true), 4000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) resumePaused(false); });
 
-  function addStream(name) {
+  /* opts.place = false: crea el recuadro pero no lo pone en ninguna fila (lo hace quien llama). */
+  function addStream(name, opts) {
     const dup = findByName(name);
     if (dup) { flash(dup); return 'dup'; }
     if (tiles.size >= MAX) return 'full';
-    const t = { uid: 't' + (nextId++), name, el: null, player: null, ready: false, muted: true, offline: false, userPaused: false, retries: 0, readyAt: 0, retryTimer: 0 };
+    const t = { uid: 't' + (nextId++), name, el: null, player: null, ready: false, muted: true, offline: false, userPaused: false, retries: 0, readyAt: 0, retryTimer: 0, probe: null };
     tiles.set(t.uid, t);
     buildTile(t);
     queueMount(t);
-    if (manual && rows.length) {
-      const last = rows[rows.length - 1];
-      if (last.length < COLS) last.push(t.uid); else rows.push([t.uid]);
-    } else {
-      rows.push([t.uid]);
+    if (!(opts && opts.place === false)) {
+      if (manual && rows.length) {
+        const last = rows[rows.length - 1];
+        if (last.length < COLS) last.push(t.uid); else rows.push([t.uid]);
+      } else {
+        rows.push([t.uid]);
+      }
     }
     if (!audio) audio = t.uid;
     return 'ok';
   }
 
-  function removeStream(uid) {
+  /* Borra el recuadro y su reproductor, sin tocar las filas. */
+  function destroyTile(uid) {
     const t = tiles.get(uid);
-    if (!t || locked) return;
+    if (!t) return;
     clearTimeout(t.retryTimer);
-    rows = rows.map((r) => r.filter((u) => u !== uid)).filter((r) => r.length);
+    if (t.probe) t.probe(false);
     tiles.delete(uid);
     t.el.remove();
-    closeSuggest();
-    if (audio === uid) audio = flat()[0] || null;
-    if (focusUid === uid) focusUid = null;
     if (picked === uid) picked = null;
+  }
+
+  function removeStream(uid) {
+    if (!tiles.has(uid) || locked) return;
+    destroyTile(uid);
+    closeSuggest();
+    rows = rows.map((r) => r.filter((u) => u !== uid)).filter((r) => r.length);
     if (!manual) reflow();
-    if (!tiles.size) { manual = false; editing = false; mode = 'grid'; }
+    if (!tiles.size) { manual = false; editing = false; }
     render();
   }
 
@@ -692,44 +734,45 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     });
   }
 
+  /* ---------- pantalla completa ---------- */
+  function syncFullscreen() {
+    const fs = document.fullscreenElement;
+    tiles.forEach((t) => {
+      const on = fs === t.el;
+      const b = t.el.querySelector('.head [data-act="full"]');
+      b.innerHTML = on ? ICONS.fullExit : ICONS.full;
+      b.title = on ? 'Salir de pantalla completa' : 'Pantalla completa';
+      b.setAttribute('aria-label', (on ? 'Salir de pantalla completa de ' : 'Pantalla completa de ') + t.name);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+  document.addEventListener('fullscreenchange', syncFullscreen);
+
+  function toggleFullscreen(tile) {
+    if (document.fullscreenElement) {
+      const p = document.exitFullscreen && document.exitFullscreen();
+      if (p && p.catch) p.catch(() => { /* ignorar */ });
+      return;
+    }
+    const p = tile.requestFullscreen && tile.requestFullscreen();
+    if (p && p.catch) p.catch(() => setStatus('La pantalla completa no está disponible acá. Usá el botón del reproductor.', true));
+    else if (!tile.requestFullscreen) setStatus('Este navegador no permite pantalla completa para el recuadro. Usá el botón del reproductor.', true);
+  }
+
   /* ---------- disposición ---------- */
   function layout() {
-    const list = flat();
-    const n = list.length;
-    const focused = mode === 'focus' && n > 1;
+    const n = tiles.size;
     board.hidden = n === 0;
-
-    if (focused) {
-      if (!focusUid || !tiles.has(focusUid)) focusUid = (audio && tiles.has(audio)) ? audio : list[0];
-      const side = Math.round(C * 0.22);
-      board.style.gridTemplateColumns = 'repeat(' + C + ', minmax(0, 1fr))';
-      board.style.gridTemplateRows = 'repeat(' + (n - 1) + ', minmax(0, 1fr))';
-      let r = 1;
-      list.forEach((uid) => {
+    board.style.gridTemplateColumns = GUTTER + 'px repeat(' + COLS + ', minmax(0, 1fr))';
+    board.style.gridTemplateRows = 'repeat(' + Math.max(1, rows.length) + ', minmax(0, 1fr))';
+    rows.forEach((row, ri) => {
+      row.forEach((uid, i) => {
         const el = tiles.get(uid).el;
-        if (uid === focusUid) {
-          el.style.setProperty('--gc', '1 / ' + (C - side + 1));
-          el.style.setProperty('--gr', '1 / span ' + (n - 1));
-        } else {
-          el.style.setProperty('--gc', (C - side + 1) + ' / ' + (C + 1));
-          el.style.setProperty('--gr', String(r++));
-        }
+        el.style.setProperty('--gc', String(i + 2));
+        el.style.setProperty('--gr', String(ri + 1));
       });
-    } else {
-      board.style.gridTemplateColumns = 'repeat(' + COLS + ', minmax(0, 1fr))';
-      board.style.gridTemplateRows = 'repeat(' + Math.max(1, rows.length) + ', minmax(0, 1fr))';
-      rows.forEach((row, ri) => {
-        row.forEach((uid, i) => {
-          const el = tiles.get(uid).el;
-          el.style.setProperty('--gc', String(i + 1));
-          el.style.setProperty('--gr', String(ri + 1));
-        });
-      });
-    }
-    list.forEach((uid, i) => { tiles.get(uid).el.style.order = String(i); });   // orden en celular
-    tiles.forEach((t) => {
-      t.el.querySelector('[data-act="focus"]').setAttribute('aria-pressed', String(focused && t.uid === focusUid));
     });
+    flat().forEach((uid, i) => { tiles.get(uid).el.style.order = String(i); });   // orden en celular
     fit();
   }
 
@@ -741,39 +784,42 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     }
     const W = stage.clientWidth, H = stage.clientHeight;
     if (!W || !H || !tiles.size) return;
-    if (mode === 'focus' && tiles.size > 1) {
-      board.style.setProperty('--bw', W + 'px');
-      board.style.setProperty('--bh', H + 'px');
-      return;
-    }
     const r = Math.max(1, rows.length);
     const chrome = HEAD + 8;                       // barra del recuadro + márgenes (6) + bordes (2)
-    const byW = W / COLS;
+    const byW = (W - GUTTER) / COLS;
     const byH = ((H / r) - chrome) * 16 / 9 + 8;
     const cw = Math.floor(Math.max(120, Math.min(byW, byH)));
     const ch = Math.round((cw - 8) * 9 / 16) + chrome;
-    board.style.setProperty('--bw', (cw * COLS) + 'px');
+    board.style.setProperty('--bw', (GUTTER + cw * COLS) + 'px');
     board.style.setProperty('--bh', (ch * r) + 'px');
   }
   if (window.ResizeObserver) new ResizeObserver(() => fit()).observe(stage);
   window.addEventListener('resize', fit);
 
-  function renderRowTools() {
-    rowtools.textContent = '';
-    const show = editOn() && rows.length > 1;
-    rowtools.hidden = !show;
-    if (!show) return;
-    rowtools.style.gridTemplateRows = 'repeat(' + rows.length + ', minmax(0, 1fr))';
+  /* Controles de cada fila: cambiar la fila por un team y, al editar, subir, bajar o arrastrar. */
+  function renderRowBars() {
+    board.querySelectorAll('.rowbar').forEach((el) => el.remove());
+    if (!rows.length) return;
+    const on = editOn();
     rows.forEach((row, ri) => {
       const d = document.createElement('div');
-      d.className = 'rowtool';
+      d.className = 'rowbar';
       d.dataset.row = String(ri);
       d.style.gridRow = String(ri + 1);
-      d.innerHTML =
-        '<button type="button" data-rowact="up" title="Subir fila" aria-label="Subir fila ' + (ri + 1) + '"' + (ri === 0 ? ' disabled' : '') + '>' + ICONS.up + '</button>' +
-        '<span class="rgrip" draggable="true" data-row="' + ri + '" title="Arrastrar para intercambiar filas">' + ICONS.grip + '<b>' + (ri + 1) + '</b></span>' +
-        '<button type="button" data-rowact="down" title="Bajar fila" aria-label="Bajar fila ' + (ri + 1) + '"' + (ri === rows.length - 1 ? ' disabled' : '') + '>' + ICONS.down + '</button>';
-      rowtools.appendChild(d);
+      d.style.gridColumn = '1';
+      let html = '';
+      if (!locked) {
+        html += '<button type="button" data-rowact="team" title="Cambiar la fila ' + (ri + 1) + ' por un team" aria-label="Cambiar la fila ' + (ri + 1) + ' por un team">' + ICONS.team + '</button>';
+      }
+      if (on && rows.length > 1) {
+        html +=
+          '<button type="button" data-rowact="up" title="Subir fila" aria-label="Subir fila ' + (ri + 1) + '"' + (ri === 0 ? ' disabled' : '') + '>' + ICONS.up + '</button>' +
+          '<span class="rgrip" draggable="true" data-row="' + ri + '" title="Arrastrar para intercambiar filas">' + ICONS.grip + '<b>' + (ri + 1) + '</b></span>' +
+          '<button type="button" data-rowact="down" title="Bajar fila" aria-label="Bajar fila ' + (ri + 1) + '"' + (ri === rows.length - 1 ? ' disabled' : '') + '>' + ICONS.down + '</button>';
+      }
+      if (!html) return;
+      d.innerHTML = html;
+      board.appendChild(d);
     });
   }
 
@@ -802,13 +848,14 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     try { history.replaceState(null, '', s ? '#' + s : location.pathname + location.search); } catch (e) { /* ignorar */ }
     try {
       localStorage.setItem(KEY_LAYOUT, s);
-      localStorage.setItem(KEY_PREFS, JSON.stringify({ locked }));
+      localStorage.setItem(KEY_PREFS, JSON.stringify({ locked, fuzz: fuzzOn }));
     } catch (e) { /* ignorar */ }
   }
 
   /* ---------- render general ---------- */
   function render() {
     const n = tiles.size;
+    if (audio && !tiles.has(audio)) audio = flat()[0] || null;
     if (locked) { editing = false; picked = null; }
     emptyEl.hidden = n > 0;
     $('count').textContent = n ? n + ' / ' + MAX : '';
@@ -826,16 +873,14 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     btnEdit.disabled = locked || !n;
     btnEdit.setAttribute('aria-pressed', String(editing && !locked));
     btnEdit.textContent = (editing && !locked) ? 'Listo' : 'Editar';
-    $('layout').querySelectorAll('button').forEach((b) => {
-      b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
-      b.disabled = locked;
-    });
 
     layout();
-    renderRowTools();
+    renderRowBars();
     applyUI();
     applyAudio();
+    syncFullscreen();
     persist();
+    updateFuzzUI();
     if (!panel.hidden) renderBank();
   }
 
@@ -869,12 +914,130 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     return added.length;
   }
 
+  /* ---------- teams ---------- */
+  function teamsMap() {
+    const m = new Map();
+    bank.forEach((b) => {
+      if (!b.team) return;
+      if (!m.has(b.team)) m.set(b.team, []);
+      m.get(b.team).push(b.channel);
+    });
+    return m;
+  }
+
+  /* Carga un team completo como filas nuevas (de a 5). */
+  function addTeam(team) {
+    if (locked) return;
+    if (!window.Twitch || !Twitch.Player) { setStatus('No cargó el reproductor de Twitch. Recargá la página.', true); return; }
+    const all = teamsMap().get(team) || [];
+    const fresh = all.filter((c) => !findByName(c));
+    if (!fresh.length) { setStatus('Todos los streamers de ' + team + ' ya están en pantalla.', true); return; }
+    const room = MAX - tiles.size;
+    if (room <= 0) { setStatus('El máximo es ' + MAX + ' streams. Quitá alguno para cargar ' + team + '.', true); return; }
+    const take = fresh.slice(0, room);
+    for (let i = 0; i < take.length; i += COLS) {
+      const row = [];
+      take.slice(i, i + COLS).forEach((name) => {
+        if (addStream(name, { place: false }) === 'ok') row.push(findByName(name).uid);
+      });
+      if (row.length) rows.push(row);
+    }
+    manual = true;
+    render();
+    const notes = [];
+    if (all.length - fresh.length) notes.push((all.length - fresh.length) + ' ya estaban en pantalla');
+    if (fresh.length > take.length) notes.push('entraron ' + take.length + ' de ' + fresh.length + ' por el máximo de ' + MAX);
+    setStatus('Team ' + team + ' cargado: ' + take.length + ' streamers' + (notes.length ? ' (' + notes.join('; ') + ')' : '') + '.');
+  }
+
+  /* Cambia una fila entera por un team. Los streamers que ya estaban en la fila siguen reproduciéndose. */
+  function applyTeamToRow(ri, team) {
+    if (locked || !rows[ri]) return;
+    const row = rows[ri];
+    const inRow = new Set(row.map(nameOf));
+    const wanted = teamsMap().get(team) || [];
+    const elsewhere = wanted.filter((c) => findByName(c) && !inRow.has(c));
+    const usable = wanted.filter((c) => !elsewhere.includes(c));
+    const list = usable.slice(0, COLS);
+    if (!list.length) { setStatus('Todos los streamers de ' + team + ' ya están en otras filas.', true); return; }
+
+    const keep = new Map();
+    row.forEach((uid) => { if (list.includes(nameOf(uid))) keep.set(nameOf(uid), uid); });
+    const free = row.filter((uid) => !list.includes(nameOf(uid)));
+    const out = [];
+    list.forEach((name) => {
+      if (keep.has(name)) { out.push(keep.get(name)); return; }
+      const slot = free.shift();
+      if (slot) {
+        const t = tiles.get(slot);
+        t.name = name; refreshTile(t); mountPlayer(t);
+        out.push(slot);
+      } else if (addStream(name, { place: false }) === 'ok') {
+        out.push(findByName(name).uid);
+      }
+    });
+    free.forEach(destroyTile);
+    rows[ri] = out;
+    manual = true;
+    render();
+    const notes = [];
+    if (elsewhere.length) notes.push(elsewhere.length + ' ya estaban en otras filas');
+    if (usable.length > COLS) notes.push('cada fila tiene lugar para ' + COLS);
+    setStatus('Fila ' + (ri + 1) + ' cambiada por ' + team + (notes.length ? ' (' + notes.join('; ') + ')' : '') + '.');
+  }
+
+  /* Lista de teams que se abre junto al botón de cada fila. */
+  function closeTeamMenu() { tm.hidden = true; tm.dataset.row = ''; }
+
+  function openTeamMenu(anchor, ri) {
+    closeSuggest();
+    tm.textContent = '';
+    tm.dataset.row = String(ri);
+    const teams = teamsMap();
+    if (!teams.size) {
+      const h = document.createElement('div');
+      h.className = 'sg-hint';
+      h.textContent = bank.length ? 'El banco no tiene una columna "Team" con datos.' : 'Todavía no hay banco. Abrí "Banco" y conectá tu Google Sheet.';
+      tm.appendChild(h);
+    }
+    teams.forEach((chs, team) => {
+      const d = document.createElement('div');
+      d.className = 'sg-item';
+      d.dataset.team = team;
+      d.setAttribute('role', 'menuitem');
+      const a = document.createElement('span'); a.className = 'sg-ch'; a.textContent = team;
+      const s = document.createElement('span'); s.className = 'sg-sub'; s.textContent = chs.join(', ');
+      const c = document.createElement('span'); c.className = 'sg-tag'; c.textContent = chs.length;
+      d.append(a, s, c);
+      tm.appendChild(d);
+    });
+    const r = anchor.getBoundingClientRect();
+    const w = Math.min(360, window.innerWidth - 16);
+    tm.style.width = w + 'px';
+    tm.style.left = Math.max(8, Math.min(r.right + 6, window.innerWidth - 8 - w)) + 'px';
+    const below = window.innerHeight - r.top - 10;
+    tm.style.top = Math.max(8, r.top) + 'px'; tm.style.bottom = 'auto';
+    tm.style.maxHeight = Math.max(120, Math.min(340, below)) + 'px';
+    tm.hidden = false;
+  }
+
+  tm.addEventListener('click', (e) => {
+    const it = e.target.closest('.sg-item');
+    if (!it) return;
+    const ri = Number(tm.dataset.row);
+    closeTeamMenu();
+    applyTeamToRow(ri, it.dataset.team);
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!tm.hidden && !tm.contains(e.target) && !(e.target.closest && e.target.closest('[data-rowact="team"]'))) closeTeamMenu();
+  }, true);
+
   /* ---------- sugerencias del banco (campo de cada recuadro y campo principal) ---------- */
   const S = { input: null, getQuery: null, onPick: null, items: [], idx: -1 };
 
   function suggestEntries(q) {
     const nq = norm(q);
-    let list = nq ? bank.filter((b) => b.search.includes(nq)) : bank.slice();
+    const list = nq ? bank.filter((b) => b.search.includes(nq)) : bank.slice();
     if (nq) list.sort((a, b) => Number(b.channel.startsWith(nq)) - Number(a.channel.startsWith(nq)));
     return list.slice(0, 60);
   }
@@ -893,7 +1056,7 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     if (!S.items.length) {
       const h = document.createElement('div');
       h.className = 'sg-hint';
-      h.textContent = bank.length ? 'Ningún streamer del banco coincide.' : 'Todavía no hay banco. Abrí "Banco" para importar tu Excel.';
+      h.textContent = bank.length ? 'Ningún streamer del banco coincide.' : 'Todavía no hay banco. Abrí "Banco" y conectá tu Google Sheet.';
       sg.appendChild(h);
     }
     S.items.forEach((b, i) => {
@@ -905,7 +1068,7 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
       const s = document.createElement('span'); s.className = 'sg-sub';
       s.textContent = open.has(b.channel) ? 'ya está en pantalla' : [b.name, b.notes].filter(Boolean).join(' · ');
       d.append(a, s);
-      if (b.group) { const g = document.createElement('span'); g.className = 'sg-tag'; g.textContent = b.group; d.appendChild(g); }
+      if (b.team) { const g = document.createElement('span'); g.className = 'sg-tag'; g.textContent = b.team; d.appendChild(g); }
       sg.appendChild(d);
     });
 
@@ -927,6 +1090,7 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   }
 
   function openSuggest(inp, getQuery, onPick) {
+    closeTeamMenu();
     S.input = inp; S.getQuery = getQuery; S.onPick = onPick; S.idx = -1;
     renderSuggest();
   }
@@ -934,16 +1098,14 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   function pickSuggest(i) {
     const b = S.items[i];
     if (!b) return;
-    if (tiles.size && [...tiles.values()].some((t) => t.name === b.channel)) {
-      const t = findByName(b.channel); if (t) flash(t);
-      return;
-    }
+    const dup = findByName(b.channel);
+    if (dup) { flash(dup); return; }
     const cb = S.onPick;
     closeSuggest();
     cb(b);
   }
 
-  /* Flechas, Enter y Escape para las sugerencias. Devuelve true si la tecla se usó. */
+  /* Flechas y Enter para las sugerencias. Devuelve true si la tecla se usó. */
   function suggestKeys(e) {
     if (!S.input || sg.hidden) return false;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -972,13 +1134,17 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   });
 
   /* Campos de texto de cada recuadro */
+  const tileSuggest = (inp) => {
+    const uid = inp.closest('.tile').dataset.uid;
+    openSuggest(inp, () => (inp._touched ? inp.value : ''), (b) => { replaceChannel(uid, b.channel); inp.blur(); });
+  };
+
   stage.addEventListener('focusin', (e) => {
     const inp = e.target.closest && e.target.closest('.chan');
     if (!inp || inp.readOnly) return;
-    const uid = inp.closest('.tile').dataset.uid;
     inp.select();
     inp._touched = false;
-    openSuggest(inp, () => (inp._touched ? inp.value : ''), (b) => { replaceChannel(uid, b.channel); inp.blur(); });
+    tileSuggest(inp);
   });
 
   stage.addEventListener('input', (e) => {
@@ -986,10 +1152,7 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     if (!inp || inp.readOnly) return;
     inp._touched = true;
     S.idx = -1;
-    if (S.input !== inp) {
-      const uid = inp.closest('.tile').dataset.uid;
-      openSuggest(inp, () => (inp._touched ? inp.value : ''), (b) => { replaceChannel(uid, b.channel); inp.blur(); });
-    } else renderSuggest();
+    if (S.input !== inp) tileSuggest(inp); else renderSuggest();
   });
 
   stage.addEventListener('keydown', (e) => {
@@ -1016,7 +1179,8 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     setTimeout(() => {
       if (document.activeElement === inp) return;
       if (S.input === inp) closeSuggest();
-      const t = tiles.get(inp.closest('.tile') && inp.closest('.tile').dataset.uid);
+      const tile = inp.closest('.tile');
+      const t = tile && tiles.get(tile.dataset.uid);
       if (t) inp.value = t.name;
     }, 120);
   });
@@ -1057,8 +1221,11 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   stage.addEventListener('click', (e) => {
     const rb = e.target.closest('[data-rowact]');
     if (rb) {
-      const ri = Number(rb.closest('.rowtool').dataset.row);
-      swapRows(ri, rb.dataset.rowact === 'up' ? ri - 1 : ri + 1);
+      const ri = Number(rb.closest('.rowbar').dataset.row);
+      const act = rb.dataset.rowact;
+      if (act === 'team') {
+        if (!tm.hidden && Number(tm.dataset.row) === ri) closeTeamMenu(); else openTeamMenu(rb, ri);
+      } else swapRows(ri, act === 'up' ? ri - 1 : ri + 1);
       return;
     }
     const btn = e.target.closest('button[data-act]');
@@ -1073,17 +1240,8 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
         removeStream(uid); break;
       case 'reload':
         mountPlayer(t); setStatus('Recargando ' + t.name + '.'); break;
-      case 'focus':
-        if (locked) break;
-        if (mode === 'focus' && focusUid === uid) mode = 'grid';
-        else { mode = 'focus'; focusUid = uid; editing = false; picked = null; }
-        render();
-        break;
-      case 'full': {
-        const p = tile.requestFullscreen && tile.requestFullscreen();
-        if (p && p.catch) p.catch(() => setStatus('La pantalla completa no está disponible acá. Usá el botón del reproductor.', true));
-        break;
-      }
+      case 'full':
+        toggleFullscreen(tile); break;
       case 'pick':
         if (locked) break;
         picked = (picked === uid) ? null : uid;
@@ -1101,11 +1259,11 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   function dragTarget(e) {
     if (!dragging || !e.target.closest) return null;
     const tileEl = e.target.closest('.tile');
-    const rtEl = e.target.closest('.rowtool');
+    const rbEl = e.target.closest('.rowbar');
     if (dragging.kind === 'tile') {
       if (tileEl && tileEl.dataset.uid !== dragging.uid) return { kind: 'tile', uid: tileEl.dataset.uid };
     } else {
-      const ri = tileEl ? rowIndexOf(tileEl.dataset.uid) : rtEl ? Number(rtEl.dataset.row) : -1;
+      const ri = tileEl ? rowIndexOf(tileEl.dataset.uid) : rbEl ? Number(rbEl.dataset.row) : -1;
       if (ri >= 0 && ri !== dragging.index) return { kind: 'row', index: ri };
     }
     return null;
@@ -1167,27 +1325,17 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   document.addEventListener('dragend', endDrag);
 
   /* ---------- barra superior ---------- */
-  $('layout').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-mode]');
-    if (!b || locked) return;
-    mode = b.dataset.mode;
-    if (mode === 'focus') { editing = false; picked = null; }
-    if (mode === 'focus' && tiles.size < 2) setStatus('Agregá un segundo stream para usar el modo Foco.');
-    render();
-  });
-
   btnEdit.addEventListener('click', () => {
     if (locked) return;
     editing = !editing;
     picked = null;
-    if (editing) mode = 'grid';
     render();
   });
 
   btnLock.addEventListener('click', () => {
     if (!tiles.size) return;
     locked = !locked;
-    if (locked) { manual = true; editing = false; picked = null; endDrag(); closeSuggest(); }
+    if (locked) { manual = true; editing = false; picked = null; endDrag(); closeSuggest(); closeTeamMenu(); }
     render();
     setStatus(locked ? 'Layout bloqueado: las posiciones y los canales quedan fijos.' : 'Layout desbloqueado.');
   });
@@ -1198,10 +1346,10 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
 
   $('clear').addEventListener('click', () => {
     if (locked) return;
-    tiles.forEach((t) => { clearTimeout(t.retryTimer); t.el.remove(); });
-    tiles.clear();
-    rows = []; audio = null; focusUid = null; picked = null;
-    manual = false; editing = false; mode = 'grid';
+    [...tiles.keys()].forEach(destroyTile);
+    rows = []; audio = null; picked = null;
+    manual = false; editing = false;
+    closeTeamMenu();
     render();
   });
 
@@ -1220,7 +1368,8 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
       e.preventDefault(); input.focus();
     }
     if (e.key === 'Escape') {
-      if (picked) { picked = null; applyUI(); }
+      if (!tm.hidden) closeTeamMenu();
+      else if (picked) { picked = null; applyUI(); }
       else if (!panel.hidden && tag !== 'INPUT') toggleBank(false);
     }
   });
@@ -1230,26 +1379,118 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     window.addEventListener(ev, () => { if (!gesture) { gesture = true; applyAudio(); } }, true);
   });
 
-  /* ---------- banco de streamers (Excel / CSV) ---------- */
-  let xlsxPromise = null;
-  function loadXlsx() {
-    if (window.XLSX) return Promise.resolve();
-    if (!xlsxPromise) {
-      xlsxPromise = new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = XLSX_URL;
-        s.onload = () => resolve();
-        s.onerror = () => { xlsxPromise = null; reject(new Error('xlsx')); };
-        document.head.appendChild(s);
-      });
-    }
-    return xlsxPromise;
+  /* ---------- Fuzzer: renueva los streams con canales del banco que estén en vivo ---------- */
+  /* Para saber si un canal está en vivo se lo carga en el recuadro y se espera la señal
+     del reproductor de Twitch: PLAYING (en vivo) u OFFLINE (no está). */
+  function tryChannel(t, name) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (live) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        if (t.probe === finish) t.probe = null;
+        resolve(live);
+      };
+      const timer = setTimeout(() => finish(false), PROBE_MS);
+      if (t.probe) t.probe(false);
+      t.probe = finish;
+      t.name = name;
+      refreshTile(t);
+      mountPlayer(t);
+    });
   }
 
+  async function refreshSlot(uid, ctx) {
+    const t = tiles.get(uid);
+    if (!t) return false;
+    const original = t.name;
+    for (let k = 0; k < FUZZ_TRIES && tiles.has(uid); k++) {
+      const cand = ctx.pool.find((c) => !ctx.dead.has(c) && !findByName(c));
+      if (!cand) break;
+      const live = await tryChannel(t, cand);
+      if (!tiles.has(uid)) return false;
+      if (live) return true;
+      ctx.dead.add(cand);
+    }
+    if (tiles.has(uid) && t.name !== original) {     // no hubo ninguno en vivo: queda como estaba
+      t.name = original; refreshTile(t); mountPlayer(t);
+    }
+    return false;
+  }
+
+  async function fuzzRefresh() {
+    if (fuzzBusy) return;
+    const uids = flat();
+    if (!uids.length || !bank.length) { fuzzNext = Date.now() + FUZZ_MS; return; }
+    fuzzBusy = true;
+    updateFuzzUI();
+    const ctx = { pool: shuffle(bank.map((b) => b.channel)), dead: new Set(uids.map(nameOf)) };
+    const queue = uids.slice();
+    let ok = 0;
+    const worker = async () => {
+      while (queue.length && fuzzOn) {
+        if (await refreshSlot(queue.shift(), ctx)) ok++;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(FUZZ_WORKERS, queue.length) }, worker));
+    fuzzBusy = false;
+    fuzzNext = Date.now() + FUZZ_MS;
+    render();
+    if (fuzzOn) {
+      const left = uids.length - ok;
+      setStatus('Fuzzer: ' + ok + ' de ' + uids.length + ' recuadros renovados con canales en vivo' +
+        (left ? '; ' + left + ' quedaron como estaban porque no encontré otro en vivo' : '') + '.', left > 0 && ok === 0);
+    }
+  }
+
+  function updateFuzzUI() {
+    btnFuzz.setAttribute('aria-pressed', String(fuzzOn));
+    let txt = 'Fuzzer';
+    if (fuzzOn) {
+      if (fuzzBusy) txt += ' · buscando…';
+      else {
+        const s = Math.max(0, Math.ceil((fuzzNext - Date.now()) / 1000));
+        txt += ' · ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+      }
+    }
+    if (btnFuzz.textContent !== txt) btnFuzz.textContent = txt;
+  }
+
+  btnFuzz.addEventListener('click', () => {
+    if (!fuzzOn) {
+      if (!bank.length) { setStatus('El Fuzzer elige canales de tu banco. Conectá primero el Google Sheet.', true); toggleBank(true); return; }
+      if (!tiles.size) { setStatus('Cargá algún stream o team primero: el Fuzzer renueva los recuadros que ya tenés.', true); return; }
+      if (locked) { setStatus('El layout está bloqueado. Desbloquealo para usar el Fuzzer.', true); return; }
+      fuzzOn = true;
+      fuzzNext = Date.now();
+      persist();
+      updateFuzzUI();
+      setStatus('Fuzzer encendido: renueva ahora y después cada 10 minutos.');
+      fuzzRefresh();
+    } else {
+      fuzzOn = false;
+      persist();
+      updateFuzzUI();
+      setStatus('Fuzzer apagado.');
+    }
+  });
+
+  setInterval(() => {
+    if (!fuzzOn) return;
+    updateFuzzUI();
+    if (fuzzBusy || Date.now() < fuzzNext || document.hidden) return;
+    if (locked) { fuzzNext = Date.now() + 60000; return; }
+    const a = document.activeElement;
+    if (a && a.classList && a.classList.contains('chan')) { fuzzNext = Date.now() + 30000; return; }
+    fuzzRefresh();
+  }, 1000);
+
+  /* ---------- banco de streamers (Google Sheet) ---------- */
   function parseCSV(text) {
     text = text.replace(/^﻿/, '');
     const first = text.split(/\r?\n/, 1)[0];
-    const delim = [';', '\t', ','].map((d) => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
+    const delim = [',', ';', '\t'].map((d) => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
     const out = [];
     let row = [], cell = '', q = false;
     for (let i = 0; i < text.length; i++) {
@@ -1266,8 +1507,8 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     return out;
   }
 
-  /* Convierte filas de una planilla en entradas del banco. Busca las columnas por su encabezado:
-     "Canal de Twitch", "Nombre", "Grupo", "Notas" y "Activo". Sin encabezados, la primera columna es el canal. */
+  /* Convierte filas de la hoja en entradas del banco. Busca las columnas por su encabezado:
+     "Canal de Twitch", "Nombre", "Team", "Notas" y "Activo". Sin encabezados, la primera columna es el canal. */
   function rowsToBank(arr) {
     const data = arr.filter((r) => r.some((c) => String(c == null ? '' : c).trim() !== ''));
     if (!data.length) return [];
@@ -1275,13 +1516,13 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     const find = (keys, skip) => head.findIndex((h, i) => i !== skip && keys.some((k) => h.includes(k)));
     let ci = find(['canal', 'channel', 'twitch', 'login', 'usuario', 'user']);
     if (ci < 0) ci = find(['streamer']);
-    let ni = -1, gi = -1, oi = -1, ai = -1, start = 1;
+    let ni = -1, ti = -1, oi = -1, ai = -1, start = 1;
     if (ci < 0) {
-      ci = 0; ni = 1; gi = 2; oi = 3;
+      ci = 0; ni = 1; ti = 2; oi = 3;
       start = parseChannel(data[0][0]) ? 0 : 1;
     } else {
       ni = find(['nombre', 'name', 'alias'], ci);
-      gi = find(['grupo', 'group', 'categoria', 'category', 'lista', 'equipo'], ci);
+      ti = find(['team', 'equipo', 'grupo', 'group', 'categoria', 'category', 'lista'], ci);
       oi = find(['nota', 'note', 'coment', 'descrip'], ci);
       ai = find(['activo', 'active', 'habilitado'], ci);
     }
@@ -1293,97 +1534,128 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
       if (!ch || seen.has(ch)) continue;
       if (ai >= 0 && ['no', 'n', '0', 'false', 'falso'].includes(norm(r[ai]))) continue;
       seen.add(ch);
-      out.push({ channel: ch, name: cell(r, ni), group: cell(r, gi), notes: cell(r, oi) });
+      out.push({ channel: ch, name: cell(r, ni), team: cell(r, ti), notes: cell(r, oi) });
     }
     return out;
   }
 
-  async function parseBank(buf, filename) {
-    let arr;
-    if (/\.csv$/i.test(filename)) {
-      arr = parseCSV(new TextDecoder('utf-8').decode(buf));
-    } else {
-      await loadXlsx();
-      const wb = XLSX.read(buf, { type: 'array' });
-      const sheet = wb.SheetNames.find((s) => /banco|bank/i.test(s)) || wb.SheetNames[0];
-      arr = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { header: 1, defval: '', blankrows: false });
-    }
-    return rowsToBank(arr);
+  /* Direcciones CSV de una hoja de Google según el link pegado. */
+  function sheetCsvUrls(link) {
+    const s = String(link || '').trim();
+    const m = s.match(/spreadsheets\/d\/(e\/)?([a-zA-Z0-9_-]+)/) || (/^[a-zA-Z0-9_-]{25,}$/.test(s) ? [null, '', s] : null);
+    if (!m) return null;
+    const gid = (s.match(/[#&?]gid=(\d+)/) || [])[1];
+    const g = gid ? '&gid=' + gid : '';
+    if (m[1]) return ['https://docs.google.com/spreadsheets/d/e/' + m[2] + '/pub?output=csv' + g];
+    return [
+      'https://docs.google.com/spreadsheets/d/' + m[2] + '/gviz/tq?tqx=out:csv' + g,
+      'https://docs.google.com/spreadsheets/d/' + m[2] + '/export?format=csv' + g
+    ];
   }
 
-  function setBank(entries, label, kind) {
-    bank = entries.map((e) => ({ ...e, search: norm([e.channel, e.name, e.group, e.notes].join(' ')) }));
-    bankInfo = { kind, label };
+  async function fetchSheet(link) {
+    const urls = sheetCsvUrls(link);
+    if (!urls) throw new Error('link');
+    let lastErr = new Error('fail');
+    for (const u of urls) {
+      try {
+        const res = await fetch(u, { cache: 'no-store' });
+        if (!res.ok) { lastErr = new Error('http' + res.status); continue; }
+        const text = await res.text();
+        if (/text\/html/i.test(res.headers.get('content-type') || '') || /^\s*<(!doctype|html)/i.test(text)) { lastErr = new Error('private'); continue; }
+        const entries = rowsToBank(parseCSV(text));
+        if (!entries.length) { lastErr = new Error('empty'); continue; }
+        return entries;
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  }
+
+  function sheetErrorMessage(e) {
+    switch (e && e.message) {
+      case 'link': return 'Ese link no parece de Google Sheets. Copialo desde la barra de direcciones de tu hoja.';
+      case 'private': return 'La hoja no es pública. En Google Sheets: Compartir > Cualquier persona con el enlace > Lector.';
+      case 'empty': return 'No encontré canales. La hoja necesita una columna "Canal de Twitch" con datos.';
+      default: return 'No pude leer la hoja. Revisá el link, que esté compartida con el enlace y tu conexión.';
+    }
+  }
+
+  function setBank(entries, updated) {
+    bank = entries.map((e) => ({ ...e, search: norm([e.channel, e.name, e.team, e.notes].join(' ')) }));
+    bankUpdated = updated || null;
     btnBank.textContent = bank.length ? 'Banco (' + bank.length + ')' : 'Banco';
     if (!panel.hidden) renderBank();
     if (S.input) renderSuggest();
   }
 
-  function saveBank(label, entries) {
-    try { localStorage.setItem(KEY_BANK, JSON.stringify({ label, entries })); } catch (e) { /* ignorar */ }
+  async function connectSheet(link, quiet) {
+    const entries = await fetchSheet(link);
+    sheetLink = link.trim();
+    setBank(entries, new Date());
+    try {
+      localStorage.setItem(KEY_SHEET, sheetLink);
+      localStorage.setItem(KEY_BANK, JSON.stringify(entries));
+    } catch (e) { /* ignorar */ }
+    if (!quiet) setStatus('Banco actualizado: ' + entries.length + ' streamers en ' + teamsMap().size + ' teams.');
+    return entries;
   }
 
-  /* Busca banco.xlsx (o banco.csv) junto a la página. Devuelve { file, entries } o null. */
-  async function fetchSiteBank() {
-    if (!/^https?:$/.test(location.protocol)) return null;
-    for (const f of ['banco.xlsx', 'banco.csv']) {
-      try {
-        const res = await fetch(f, { cache: 'no-cache' });
-        if (!res.ok || /text\/html/i.test(res.headers.get('content-type') || '')) continue;
-        const entries = await parseBank(await res.arrayBuffer(), f);
-        if (entries.length) { siteBankFound = true; return { file: f, entries }; }
-      } catch (e) { /* probar el siguiente */ }
-    }
-    return null;
-  }
-
-  /* Al iniciar: un banco importado a mano tiene prioridad; si no hay, se usa el banco.xlsx del sitio. */
   async function loadBankAtStart() {
-    let saved = null;
-    try { saved = JSON.parse(localStorage.getItem(KEY_BANK) || 'null'); } catch (e) { saved = null; }
-    if (saved && saved.entries && saved.entries.length) setBank(saved.entries, saved.label, 'import');
-    const site = await fetchSiteBank();
-    if (site && bankInfo.kind !== 'import') setBank(site.entries, site.file, 'site');
-    else if (!panel.hidden) renderBank();
-  }
-
-  function addAll(channels) {
-    if (locked) return;
-    const n = submit(channels.join(','), { keepInput: true });
-    if (n === 0 && channels.length) setStatus('Esos streamers ya están en pantalla o no hay lugar.', true);
+    try { sheetLink = DEFAULT_SHEET || localStorage.getItem(KEY_SHEET) || ''; } catch (e) { sheetLink = DEFAULT_SHEET; }
+    if (!sheetLink) return;
+    $('bp-link').value = sheetLink;
+    try {   // copia de la última vez, para tener banco aunque falle la conexión
+      const cached = JSON.parse(localStorage.getItem(KEY_BANK) || 'null');
+      if (Array.isArray(cached) && cached.length) setBank(cached, null);
+    } catch (e) { /* ignorar */ }
+    try { await connectSheet(sheetLink, true); }
+    catch (e) { setStatus(sheetErrorMessage(e) + (bank.length ? ' Uso la última copia guardada.' : ''), true); }
   }
 
   function renderBank() {
     const open = new Set([...tiles.values()].map((t) => t.name));
-    const info = $('bp-info');
-    info.textContent = bank.length
-      ? bank.length + ' streamers · ' + (bankInfo.kind === 'site' ? 'archivo ' + bankInfo.label + ' del sitio' : 'importado de ' + bankInfo.label)
-      : 'Todavía no hay banco cargado. Importá tu Excel (hoja "Banco") o dejá un archivo banco.xlsx junto a esta página.';
-    $('bp-reset').hidden = !(bankInfo.kind === 'import' && siteBankFound);
+    const teams = teamsMap();
+    const connected = !!sheetLink && bank.length > 0;
+    const hh = bankUpdated ? ' · actualizado ' + String(bankUpdated.getHours()).padStart(2, '0') + ':' + String(bankUpdated.getMinutes()).padStart(2, '0') : '';
+    $('bp-info').textContent = connected
+      ? 'Google Sheet conectado · ' + bank.length + ' streamers · ' + teams.size + ' teams' + hh
+      : 'Todavía no hay un Google Sheet conectado.';
+    $('bp-refresh').hidden = !sheetLink;
+    $('bp-disconnect').hidden = !sheetLink;
+    $('bp-help').open = !connected;
 
-    const q = norm($('bp-search').value);
-    const groups = new Map();
-    bank.forEach((b) => { if (b.group) groups.set(b.group, (groups.get(b.group) || []).concat(b.channel)); });
-    const gEl = $('bp-groups');
-    gEl.textContent = '';
-    groups.forEach((chs, g) => {
-      const free = chs.filter((c) => !open.has(c)).length;
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.dataset.group = g;
-      b.textContent = g + ' · ' + chs.length;
-      b.title = 'Cargar el grupo ' + g;
-      b.disabled = locked || free === 0 || tiles.size >= MAX;
-      gEl.appendChild(b);
+    const tEl = $('bp-teams');
+    tEl.textContent = '';
+    if (!teams.size) {
+      const d = document.createElement('div');
+      d.className = 'bp-empty';
+      d.textContent = bank.length ? 'La hoja no tiene datos en la columna "Team".' : '';
+      tEl.appendChild(d);
+    }
+    teams.forEach((chs, team) => {
+      const row = document.createElement('div');
+      row.className = 'bp-row';
+      const who = document.createElement('div'); who.className = 'who';
+      const b = document.createElement('b'); b.textContent = team + ' · ' + chs.length;
+      const sm = document.createElement('small'); sm.textContent = chs.join(', ');
+      who.append(b, sm);
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'mini'; btn.dataset.team = team;
+      const left = chs.filter((c) => !open.has(c)).length;
+      btn.textContent = left ? 'Cargar team' : 'En pantalla';
+      btn.disabled = locked || left === 0 || tiles.size >= MAX;
+      row.append(who, btn);
+      tEl.appendChild(row);
     });
 
+    const q = norm($('bp-search').value);
     const list = $('bp-list');
     list.textContent = '';
     const shown = (q ? bank.filter((b) => b.search.includes(q)) : bank).slice(0, 300);
-    if (!shown.length) {
+    if (!shown.length && bank.length) {
       const d = document.createElement('div');
       d.className = 'bp-empty';
-      d.textContent = bank.length ? 'Nada coincide con la búsqueda.' : '';
+      d.textContent = 'Nada coincide con la búsqueda.';
       list.appendChild(d);
     }
     shown.forEach((b) => {
@@ -1394,7 +1666,7 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
       const sm = document.createElement('small'); sm.textContent = [b.name, b.notes].filter(Boolean).join(' · ');
       who.append(bb, sm);
       row.appendChild(who);
-      if (b.group) { const tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = b.group; row.appendChild(tg); }
+      if (b.team) { const tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = b.team; row.appendChild(tg); }
       const add = document.createElement('button');
       add.type = 'button'; add.className = 'mini'; add.dataset.bank = b.channel;
       const isOpen = open.has(b.channel);
@@ -1414,44 +1686,35 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
   btnBank.addEventListener('click', () => toggleBank(panel.hidden));
   $('bp-close').addEventListener('click', () => toggleBank(false));
   $('bp-search').addEventListener('input', renderBank);
-  $('bp-import').addEventListener('click', () => $('bankfile').click());
+  $('bp-teams').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-team]');
+    if (b && !b.disabled) addTeam(b.dataset.team);
+  });
   $('bp-list').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-bank]');
-    if (b) { addAll([b.dataset.bank]); renderBank(); }
+    if (!b || b.disabled || locked) return;
+    submit(b.dataset.bank, { keepInput: true });
   });
-  $('bp-groups').addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-group]');
-    if (!b) return;
-    const g = b.dataset.group;
-    const chs = bank.filter((x) => x.group === g).map((x) => x.channel);
-    const left = MAX - tiles.size;
-    const open = new Set([...tiles.values()].map((t) => t.name));
-    const toAdd = chs.filter((c) => !open.has(c));
-    addAll(toAdd.slice(0, left));
-    if (toAdd.length > left) setStatus('Se cargaron ' + left + ' de ' + toAdd.length + ' porque el máximo es ' + MAX + '.', true);
+  $('bp-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const link = $('bp-link').value.trim();
+    if (!link) { setStatus('Pegá el link de tu Google Sheet.', true); return; }
+    const btn = $('bp-connect');
+    btn.disabled = true; btn.textContent = 'Conectando…';
+    try { await connectSheet(link, false); }
+    catch (err) { setStatus(sheetErrorMessage(err), true); }
+    btn.disabled = false; btn.textContent = 'Conectar';
   });
-  $('bankfile').addEventListener('change', async () => {
-    const f = $('bankfile').files[0];
-    if (!f) return;
-    try {
-      const entries = await parseBank(await f.arrayBuffer(), f.name);
-      if (!entries.length) {
-        setStatus('No encontré canales en ese archivo. Revisá que tenga una columna "Canal de Twitch".', true);
-      } else {
-        setBank(entries, f.name, 'import');
-        saveBank(f.name, entries);
-        setStatus('Banco cargado: ' + entries.length + ' streamers de ' + f.name + '.');
-      }
-    } catch (e) {
-      setStatus('No pude leer el archivo. Para .xlsx hace falta conexión (se descarga el lector de Excel); también podés guardarlo como .csv.', true);
-    }
-    $('bankfile').value = '';
+  $('bp-refresh').addEventListener('click', async () => {
+    try { await connectSheet(sheetLink, false); } catch (err) { setStatus(sheetErrorMessage(err), true); }
   });
-  $('bp-reset').addEventListener('click', async () => {
-    try { localStorage.removeItem(KEY_BANK); } catch (e) { /* ignorar */ }
-    const site = await fetchSiteBank();
-    if (site) setBank(site.entries, site.file, 'site'); else setBank([], '', 'none');
-    setStatus(site ? 'Se volvió al banco del sitio.' : 'No se encontró banco.xlsx en el sitio.', !site);
+  $('bp-disconnect').addEventListener('click', () => {
+    sheetLink = '';
+    try { localStorage.removeItem(KEY_SHEET); localStorage.removeItem(KEY_BANK); } catch (e) { /* ignorar */ }
+    $('bp-link').value = '';
+    setBank([], null);
+    if (fuzzOn) { fuzzOn = false; persist(); updateFuzzUI(); }
+    setStatus('Google Sheet desconectado.');
   });
 
   /* ---------- arranque ---------- */
@@ -1469,8 +1732,12 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
     notice.innerHTML = 'Twitch solo reproduce en páginas publicadas en la web. Subí esta carpeta a un hosting (por ejemplo Netlify Drop) o abrila desde un servidor local con <code>python3 -m http.server 8000</code>.';
   }
 
-  let wasLocked = false;
-  try { wasLocked = !!(JSON.parse(localStorage.getItem(KEY_PREFS) || '{}') || {}).locked; } catch (e) { /* ignorar */ }
+  let wasLocked = false, wasFuzz = false;
+  try {
+    const p = JSON.parse(localStorage.getItem(KEY_PREFS) || '{}') || {};
+    wasLocked = !!p.locked;
+    wasFuzz = !!p.fuzz;
+  } catch (e) { /* ignorar */ }
 
   let saved = '';
   try { saved = decodeURIComponent(location.hash.slice(1)); } catch (e) { saved = location.hash.slice(1); }
@@ -1492,13 +1759,14 @@ body.locked .head [data-act="remove"], body.locked .head [data-act="focus"] { di
       initialRows.forEach((names) => {
         const row = [];
         names.forEach((name) => {
-          if (addStream(name) === 'ok') row.push(findByName(name).uid);
+          if (addStream(name, { place: false }) === 'ok') row.push(findByName(name).uid);
         });
         if (row.length) built.push(row);
       });
       rows = built;                 // se respeta la estructura de filas guardada
       if (!manual) reflow();
       locked = wasLocked;
+      if (wasFuzz) { fuzzOn = true; fuzzNext = Date.now() + FUZZ_MS; }
     } else {
       setStatus('No cargó el reproductor de Twitch. Revisá tu conexión y recargá la página.', true);
     }
